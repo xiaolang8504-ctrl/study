@@ -1,0 +1,15 @@
+{
+  "version": "synthetic-smoke-v1",
+  "samples": [
+    {
+      "sample_id": "synthetic-page-1",
+      "strata": {"subject": "math", "print_handwriting": "mixed", "math_diagram": "formula", "quality": "clear", "page_type": "single"},
+      "regions": [{"box": [100, 100, 4500, 3500], "question_title": "例题 1", "question_content": "1+1=?"}]
+    },
+    {
+      "sample_id": "synthetic-page-2",
+      "strata": {"subject": "chinese", "print_handwriting": "print", "math_diagram": "none", "quality": "blurred", "page_type": "multi"},
+      "regions": [{"box": [300, 300, 8500, 7200], "question_title": "例题 2"}]
+    }
+  ]
+}

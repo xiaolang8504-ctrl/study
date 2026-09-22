@@ -1,0 +1,15 @@
+{
+  "20260725_wrong_question_resource_sync.sql": "de5b05e387ff93bb50b948f125f8df86f2da607ead83bac793ae0504323539a4",
+  "20260725_wrong_question_statistics_index.sql": "b00f233175453d56e6aa44caa2bc2c66dfe03528c1968146868af3843981b938",
+  "20260726_practice_session_rule_snapshot.sql": "37c000b11a6b729ba61e3607e28bf9bcbdf2cda2d147e23e9a371ee9d7283818",
+  "20260909_learning_metric_daily.sql": "b7bf2232d83401f5a448becfe592e699cdef1209a92884daebb8cce6a0bb9cd6",
+  "20260909_question_bank_content_provenance.sql": "0fd4e2492a7d51af6cb028d7f46c6a2f82f121b5d2f05aea69fd862dc2c52240",
+  "20260909_question_capture_event_audit.sql": "d895b9e6ec61af0573b043d5e3a5a995f8157e783c5f59572f9037ed6464af1a",
+  "20260909_student_guardian_rel.sql": "ead21160f93216a3125a9a29c75efbf24db4074824fcb96f070ab302ed75844e",
+  "20260911_guardian_delivery_login_upgrade.sql": "242219edbc744f18efb55a0be2a4202fe60c6e082d48e2114afe0c4c3a5836fb",
+  "20260911_practice_paper_export_task.sql": "c63eb049b669a7265160e5027c008f651b4997b14645e8cde173f45f3abba1d7",
+  "20260914_review_record_independent_answer.sql": "876d9dc212e584890a86c8eeb479b6c0d85d8907556cdc494b9afe447d739c4e",
+  "20260914_wrong_question_timeline.sql": "c55af94cb7381ae3cc6e8c453e4be303ea587566e7ae064349eb457ea00e0e1c",
+  "20260921_guardian_web_menu.sql": "88c0f566da930d76ce1a277f8458d2ab0c69c3614d0101c41fbc3dffa6c27d5e",
+  "20260921_review_mastery_evidence_reset.sql": "b8a298f0b6ad3c1e202142bf30190b1add3e1823651f053916244b59df54b584"
+}

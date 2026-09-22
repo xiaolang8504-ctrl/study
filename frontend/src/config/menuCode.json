@@ -1,0 +1,277 @@
+[
+  {
+    "code": "dashboard",
+    "name": "首页",
+    "level": 1,
+    "path": "/dashboard",
+    "icon": "el-icon-s-home",
+    "children": []
+  },
+  {
+    "code": "wrongQuestion",
+    "name": "我的错题本",
+    "level": 1,
+    "path": "/system/wrongquestion",
+    "icon": "el-icon-notebook-2",
+    "children": [
+      {
+        "code": "wrongQuestion-create",
+        "name": "录入错题",
+        "level": 2,
+        "children": []
+      },
+      {
+        "code": "wrongQuestion-detail",
+        "name": "详情",
+        "level": 2,
+        "children": []
+      },
+      {
+        "code": "wrongQuestion-update",
+        "name": "修改",
+        "level": 2,
+        "children": []
+      },
+      {
+        "code": "wrongQuestion-updateImage",
+        "name": "错图修改",
+        "level": 2,
+        "children": []
+      },
+      {
+        "code": "wrongQuestion-import",
+        "name": "图片识别导入",
+        "level": 2,
+        "children": []
+      },
+      {
+        "code": "wrongQuestion-export",
+        "name": "导出PDF/打印",
+        "level": 2,
+        "children": []
+      },
+      {
+        "code": "wrongQuestion-delete",
+        "name": "删除",
+        "level": 2,
+        "children": []
+      },
+      {
+        "code": "wrongQuestion-batchDelete",
+        "name": "批量删除",
+        "level": 2,
+        "children": []
+      }
+    ]
+  },
+  {
+    "code": "intelligentReview",
+    "name": "智能复习",
+    "level": 1,
+    "icon": "el-icon-data-analysis",
+    "children": [
+      {
+        "code": "intelligentReview-home",
+        "name": "复习概览",
+        "level": 2,
+        "path": "/system/review",
+        "icon": "el-icon-pie-chart",
+        "children": []
+      },
+      {
+        "code": "intelligentReview-today",
+        "name": "今日复习",
+        "level": 2,
+        "path": "/system/review/today",
+        "icon": "el-icon-date",
+        "children": []
+      },
+      {
+        "code": "intelligentReview-setting",
+        "name": "计划设置",
+        "level": 2,
+        "path": "/system/review/setting",
+        "icon": "el-icon-setting",
+        "children": []
+      },
+      {
+        "code": "intelligentReview-history",
+        "name": "复习历史",
+        "level": 2,
+        "path": "/system/review/history",
+        "icon": "el-icon-time",
+        "children": []
+      }
+    ]
+  },
+  {
+    "code": "questionBank",
+    "name": "题库管理",
+    "level": 1,
+    "path": "/system/question-bank",
+    "icon": "el-icon-collection",
+    "children": []
+  },
+  {
+    "code": "questionImage",
+    "name": "图片管理",
+    "level": 1,
+    "path": "/system/question-image",
+    "icon": "el-icon-picture-outline",
+    "children": []
+  },
+  {
+    "code": "similarPractice",
+    "name": "相似题练习",
+    "level": 1,
+    "path": "/system/similar-practice",
+    "icon": "el-icon-magic-stick",
+    "children": []
+  },
+  {
+    "code": "similarPracticeHistory",
+    "name": "练习历史",
+    "level": 1,
+    "path": "/system/similar-practice-history",
+    "icon": "el-icon-time",
+    "children": []
+  },
+  {
+    "code": "questionExperiment",
+    "name": "A/B实验管理",
+    "level": 1,
+    "path": "/system/question-experiment",
+    "icon": "el-icon-data-analysis",
+    "children": []
+  },
+  {
+    "code": "guardianCollaboration",
+    "name": "家庭协作",
+    "level": 1,
+    "path": "/system/guardian",
+    "icon": "el-icon-s-custom",
+    "children": []
+  },
+  {
+    "code": "book",
+    "name": "教材设置",
+    "level": 1,
+    "path": "/system/book",
+    "icon": "el-icon-reading",
+    "children": [
+      {
+        "code": "book-create",
+        "name": "新增课本",
+        "level": 2,
+        "children": []
+      },
+      {
+        "code": "book-detail",
+        "name": "详情",
+        "level": 2,
+        "children": []
+      },
+      {
+        "code": "book-update",
+        "name": "编辑",
+        "level": 2,
+        "children": []
+      },
+      {
+        "code": "book-delete",
+        "name": "删除",
+        "level": 2,
+        "children": []
+      }
+    ]
+  },
+  {
+    "code": "homeWork",
+    "name": "学习资料",
+    "level": 1,
+    "path": "/system/homework",
+    "icon": "el-icon-edit-outline",
+    "children": [
+      {
+        "code": "homeWork-create",
+        "name": "新增作业",
+        "level": 2,
+        "children": []
+      },
+      {
+        "code": "homeWork-detail",
+        "name": "详情",
+        "level": 2,
+        "children": []
+      },
+      {
+        "code": "homeWork-update",
+        "name": "编辑",
+        "level": 2,
+        "children": []
+      },
+      {
+        "code": "homeWork-delete",
+        "name": "删除",
+        "level": 2,
+        "children": []
+      }
+    ]
+  },
+  {
+    "code": "systemSetting",
+    "name": "系统设置",
+    "level": 1,
+    "icon": "el-icon-setting",
+    "children": [
+      {
+        "code": "systemSetting-personnel",
+        "name": "用户管理",
+        "level": 2,
+        "path": "/system/user",
+        "icon": "el-icon-user",
+        "children": []
+      },
+      {
+        "code": "systemSetting-role",
+        "name": "角色管理",
+        "level": 2,
+        "path": "/system/role",
+        "icon": "el-icon-s-custom",
+        "children": []
+      },
+      {
+        "code": "systemSetting-department",
+        "name": "部门管理",
+        "level": 2,
+        "path": "/system/dept",
+        "icon": "el-icon-office-building",
+        "children": []
+      },
+      {
+        "code": "systemSetting-menu",
+        "name": "菜单管理",
+        "level": 2,
+        "path": "/system/menu",
+        "icon": "el-icon-menu",
+        "children": []
+      },
+      {
+        "code": "systemSetting-api",
+        "name": "API管理",
+        "level": 2,
+        "path": "/system/resource",
+        "icon": "el-icon-connection",
+        "children": []
+      },
+      {
+        "code": "systemSetting-dict",
+        "name": "字段管理",
+        "level": 2,
+        "path": "/system/dict",
+        "icon": "el-icon-collection-tag",
+        "children": []
+      }
+    ]
+  }
+]

@@ -1,0 +1,8 @@
+{
+  "provider": "synthetic-fixture",
+  "model_version": "test-v1",
+  "samples": [
+    {"sample_id": "synthetic-page-1", "duration_ms": 120, "correction_seconds": 10, "regions": [{"box": [100, 100, 4500, 3500], "question_title": "例题1", "question_content": "1+1=?"}]},
+    {"sample_id": "synthetic-page-2", "duration_ms": 200, "correction_seconds": 30, "failure_reason": "OCR_TIMEOUT", "regions": []}
+  ]
+}

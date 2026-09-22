@@ -1,0 +1,30 @@
+# 配置加载顺序
+# 本地配置文件：bootstrap.yml、application.yml、application-dev.yml
+# 远程配置中心：app-service-shared.yaml、app-service-extension.yaml、app-service、app-service.yaml、app-service-dev.yaml
+# 如果存在重复配置，后面加载的配置会覆盖前面加载的配置内容
+spring:
+  application:
+    name: system-service
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 25MB
+  cloud:
+    nacos:
+      server-addr: 127.0.0.1:8848
+      config:
+        namespace: ad55cf5c-9725-4e8a-8e51-f684f1de5211 # 在这里设置命名空间ID（不是名称）
+        file-extension: yaml
+        shared-configs:
+          - data-id: database-config.yaml
+          - data-id: redis-config.yaml
+          - data-id: security-config.yaml
+          - data-id: msg-service.yaml
+          - data-id: log-service.yaml
+      discovery:
+        namespace: ad55cf5c-9725-4e8a-8e51-f684f1de5211
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics

@@ -1,0 +1,9 @@
+package com.study.module.system.guardian.controller;
+import com.study.common.core.domain.Result; import com.study.common.core.utils.ResultUtils;
+import com.study.module.system.guardian.dto.request.GuardianWeeklyReportSubscriptionReq; import com.study.module.system.guardian.entity.GuardianWeeklyReportSubscription; import com.study.module.system.guardian.service.GuardianWeeklyReportSubscriptionService;
+import io.swagger.annotations.Api; import io.swagger.annotations.ApiOperation; import org.springframework.beans.factory.annotation.Autowired; import org.springframework.security.access.prepost.PreAuthorize; import org.springframework.validation.annotation.Validated; import org.springframework.web.bind.annotation.*; import java.util.List;
+@Api(tags = "家长周报提醒") @RestController @RequestMapping("/api/guardianWeeklyReportSubscription") public class GuardianWeeklyReportSubscriptionController {
+ @Autowired private GuardianWeeklyReportSubscriptionService guardianWeeklyReportSubscriptionService;
+ @ApiOperation("更新家长周报提醒偏好") @PreAuthorize("isAuthenticated()") @PostMapping("/updateGuardianWeeklyReportSubscription") public Result<Void> updateGuardianWeeklyReportSubscription(@RequestBody @Validated GuardianWeeklyReportSubscriptionReq request) { guardianWeeklyReportSubscriptionService.updateGuardianWeeklyReportSubscription(request); return ResultUtils.success(); }
+ @ApiOperation("家长周报提醒偏好列表") @PreAuthorize("isAuthenticated()") @GetMapping("/guardianWeeklyReportSubscriptionList") public Result<List<GuardianWeeklyReportSubscription>> guardianWeeklyReportSubscriptionList() { return ResultUtils.success(guardianWeeklyReportSubscriptionService.guardianWeeklyReportSubscriptionList()); }
+}
