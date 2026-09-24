@@ -47,6 +47,7 @@ public interface ReviewItemMapper extends BaseMapper<ReviewItem> {
             "COALESCE(wq.level, 0) AS level, ri.stage, COALESCE(ri.mastery_score, 0) AS masteryScore, " +
             "ri.correct_streak AS correctStreak, ri.wrong_streak AS wrongStreak, ri.lapse_count AS lapseCount, " +
             "ri.review_count AS reviewCount, ri.next_review_time AS nextReviewTime, " +
+            "ri.current_interval_minutes AS currentIntervalMinutes, " +
             "CASE WHEN ri.next_review_time < #{todayStart} THEN 1 ELSE 0 END AS overdue " +
             "FROM sys_review_item ri " +
             "INNER JOIN sys_wrong_question wq ON wq.id = ri.wrong_question_id " +

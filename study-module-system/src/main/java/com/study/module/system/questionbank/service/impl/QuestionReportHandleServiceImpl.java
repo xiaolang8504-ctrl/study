@@ -9,6 +9,8 @@ import com.study.module.system.questionbank.entity.QuestionBank;
 import com.study.module.system.questionbank.mapper.QuestionReportMapper;
 import com.study.module.system.questionbank.service.QuestionReportHandleService;
 import com.study.module.system.questionbank.service.QuestionBankService;
+import com.study.module.system.questionbank.entity.QuestionContentGovernance;
+import com.study.module.system.questionbank.mapper.QuestionContentGovernanceMapper;
 import com.yunshang.budget.common.security.utils.AccountUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -25,6 +27,9 @@ public class QuestionReportHandleServiceImpl extends ServiceImpl<QuestionReportM
 
     @Autowired
     QuestionBankService questionBankService;
+
+    @Autowired
+    QuestionContentGovernanceMapper questionContentGovernanceMapper;
 
     /**
      * 处理题目举报
@@ -49,6 +54,14 @@ public class QuestionReportHandleServiceImpl extends ServiceImpl<QuestionReportM
             question.setEnable(0);
             question.setUpdateTime(LocalDateTime.now());
             questionBankService.updateById(question);
+            QuestionContentGovernance governance = new QuestionContentGovernance();
+            governance.setQuestionId(question.getId());
+            governance.setAction("DOWN");
+            governance.setIssueType(report.getReportType());
+            governance.setHandleRemark(request.getHandleRemark());
+            governance.setOperatorId(AccountUtils.getUserId());
+            governance.setCreateTime(LocalDateTime.now());
+            questionContentGovernanceMapper.insert(governance);
         }
     }
 }

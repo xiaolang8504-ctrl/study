@@ -9,7 +9,9 @@ import com.study.module.system.guardian.dto.request.GuardianInviteCreateReq;
 import com.study.module.system.guardian.dto.response.GuardianBindingResp;
 import com.study.module.system.guardian.dto.response.GuardianInviteResp;
 import com.study.module.system.guardian.entity.StudentGuardianRel;
+import com.study.module.system.guardian.entity.GuardianWeeklyReportSubscription;
 import com.study.module.system.guardian.mapper.StudentGuardianRelMapper;
+import com.study.module.system.guardian.mapper.GuardianWeeklyReportSubscriptionMapper;
 import com.study.module.system.guardian.service.GuardianAccessAuditService;
 import com.study.module.system.guardian.service.GuardianBindingService;
 import com.study.module.system.user.entity.User;
@@ -44,6 +46,9 @@ public class GuardianBindingServiceImpl extends ServiceImpl<StudentGuardianRelMa
 
     @Autowired
     private GuardianAccessAuditService guardianAccessAuditService;
+
+    @Autowired
+    private GuardianWeeklyReportSubscriptionMapper guardianWeeklyReportSubscriptionMapper;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -154,6 +159,14 @@ public class GuardianBindingServiceImpl extends ServiceImpl<StudentGuardianRelMa
         if (!updateById(relation)) {
             throw new LogicException(ErrorCodeConstants.GUARDIAN_BINDING_STATUS_INVALID);
         }
+        // 解绑后立即关闭该关系下的提醒投递；历史订阅仅保留审计价值，不再可读取或发送。
+        guardianWeeklyReportSubscriptionMapper.update(null,
+                new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<GuardianWeeklyReportSubscription>()
+                        .eq(GuardianWeeklyReportSubscription::getGuardianUserId, relation.getGuardianUserId())
+                        .eq(GuardianWeeklyReportSubscription::getStudentUserId, relation.getStudentUserId())
+                        .set(GuardianWeeklyReportSubscription::getSiteNotificationEnabled, 0)
+                        .set(GuardianWeeklyReportSubscription::getEmailEnabled, 0)
+                        .set(GuardianWeeklyReportSubscription::getUpdateTime, now));
         guardianAccessAuditService.record(relation.getId(), relation.getStudentUserId(), relation.getGuardianUserId(), userId,
                 "BINDING_REVOKED", "SUCCESS", "学生或家长主动解绑，立即撤销数据访问权");
     }
@@ -179,10 +192,14 @@ public class GuardianBindingServiceImpl extends ServiceImpl<StudentGuardianRelMa
 
     @Override
     public boolean canCurrentGuardianAccessStudent(Long studentUserId) {
-        if (studentUserId == null) {
+        return hasActiveBinding(studentUserId, AccountUtils.getUserId());
+    }
+
+    @Override
+    public boolean hasActiveBinding(Long studentUserId, Long guardianUserId) {
+        if (studentUserId == null || guardianUserId == null) {
             return false;
         }
-        Long guardianUserId = AccountUtils.getUserId();
         return count(new LambdaQueryWrapper<StudentGuardianRel>()
                 .eq(StudentGuardianRel::getGuardianUserId, guardianUserId)
                 .eq(StudentGuardianRel::getStudentUserId, studentUserId)

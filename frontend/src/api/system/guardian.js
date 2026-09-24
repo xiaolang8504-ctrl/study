@@ -34,6 +34,12 @@ export const guardianWeeklyReport = params => request({
 
 export const guardianWeeklyReportSubscriptionList = () => request({ url: '/api/guardianWeeklyReportSubscription/guardianWeeklyReportSubscriptionList', method: 'get' })
 export const updateGuardianWeeklyReportSubscription = data => request({ url: '/api/guardianWeeklyReportSubscription/updateGuardianWeeklyReportSubscription', method: 'post', data })
+export const unsubscribeGuardianWeeklyReport = data => request({ url: '/api/guardianWeeklyReportSubscription/unsubscribeGuardianWeeklyReport', method: 'post', data })
+
+export const guardianWeeklyPlanList = params => request({ url: '/api/guardianWeeklyPlan/guardianWeeklyPlanList', method: 'get', params })
+export const saveGuardianWeeklyPlan = data => request({ url: '/api/guardianWeeklyPlan/saveGuardianWeeklyPlan', method: 'post', data })
+export const requestGuardianWeeklyPlanTodo = data => request({ url: '/api/guardianWeeklyPlan/requestGuardianWeeklyPlanTodo', method: 'post', data })
+export const confirmGuardianWeeklyPlanTodo = data => request({ url: '/api/guardianWeeklyPlan/confirmGuardianWeeklyPlanTodo', method: 'post', data })
 
 export const guardianAssistedCaptureList = () => request({ url: '/api/guardianAssistedCapture/guardianAssistedCaptureList', method: 'get' })
 export const createGuardianAssistedCapture = data => request({ url: '/api/guardianAssistedCapture/createGuardianAssistedCapture', method: 'post', data })

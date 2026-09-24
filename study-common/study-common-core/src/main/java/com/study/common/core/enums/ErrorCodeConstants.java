@@ -110,6 +110,9 @@ public interface ErrorCodeConstants {
     ErrorCode WRONG_QUESTION_STATUS_INVALID = new ErrorCode(2112010, "错题状态无效");
     ErrorCode WRONG_QUESTION_STATUS_FLOW_INVALID = new ErrorCode(2112011, "错题状态流转不允许");
     ErrorCode CREATE_WRONG_QUESTION_CORRECTION_RECORD_FAIL = new ErrorCode(2112012, "提交错题订正记录失败");
+    ErrorCode WRONG_QUESTION_DUPLICATE_RELATION_INVALID = new ErrorCode(2112013, "重复题关系不存在或状态已变化");
+    ErrorCode WRONG_QUESTION_SIMILAR_CANNOT_MERGE = new ErrorCode(2112014, "相似题只能建立关联，不能按重复题合并");
+    ErrorCode WRONG_QUESTION_ANSWER_LAYER_ORDER_INVALID = new ErrorCode(2112015, "请按关键提示、解题步骤、完整解析、参考答案的顺序查看");
     // 2113-课本管理模块
     ErrorCode BOOK_NOT_EXIST = new ErrorCode(2113001, "课本信息不存在");
     ErrorCode CREATE_BOOK_FAIL = new ErrorCode(2113002, "创建课本失败");
@@ -141,6 +144,8 @@ public interface ErrorCodeConstants {
     ErrorCode GUARDIAN_BINDING_SELF_FORBIDDEN = new ErrorCode(2117005, "不能与自己的账号建立监护绑定");
     ErrorCode GUARDIAN_ASSISTED_CAPTURE_NOT_EXIST = new ErrorCode(2117006, "家长代上传任务不存在或无权操作");
     ErrorCode GUARDIAN_ASSISTED_CAPTURE_STATUS_INVALID = new ErrorCode(2117007, "家长代上传任务当前状态不允许该操作");
+    ErrorCode GUARDIAN_WEEKLY_PLAN_NOT_EXIST = new ErrorCode(2117008, "家长周计划不存在或无权操作");
+    ErrorCode GUARDIAN_WEEKLY_PLAN_TODO_STATUS_INVALID = new ErrorCode(2117009, "周计划待办当前状态不允许该操作");
     // 2116-精品题库模块
     ErrorCode QUESTION_BANK_NOT_EXIST = new ErrorCode(2116001, "题库题目不存在");
     ErrorCode QUESTION_BANK_SAVE_FAIL = new ErrorCode(2116002, "保存题库题目失败");
@@ -156,7 +161,12 @@ public interface ErrorCodeConstants {
     ErrorCode PRACTICE_SESSION_QUESTION_INSUFFICIENT = new ErrorCode(2116023, "符合当前组卷条件的题目不足，请调整筛选条件或减少题量");
     ErrorCode PRACTICE_PAPER_EXPORT_NOT_EXIST = new ErrorCode(2116024, "练习卷导出任务不存在或无权操作");
     ErrorCode PRACTICE_PAPER_EXPORT_FORMAT_INVALID = new ErrorCode(2116025, "练习卷导出格式不支持");
+    ErrorCode PRACTICE_PAPER_BASKET_INVALID = new ErrorCode(2116026, "组卷篮中存在无效、重复或无权访问的题目");
     ErrorCode PRACTICE_PAPER_EXPORT_FAILED = new ErrorCode(2116026, "练习卷导出失败，请稍后重试");
+    ErrorCode PRACTICE_PAPER_CODE_INVALID = new ErrorCode(2116027, "纸面短码格式不正确");
+    ErrorCode PRACTICE_PAPER_FILL_MODE_INVALID = new ErrorCode(2116028, "纸面回填写入方式不正确");
+    ErrorCode PRACTICE_PAPER_ANSWER_STATUS_INVALID = new ErrorCode(2116029, "纸面作答结果不正确");
+    ErrorCode PRACTICE_PAPER_FILL_OVERWRITE_NOT_EXIST = new ErrorCode(2116030, "暂无可覆盖的纸面回填记录，请选择新增一次作答");
     ErrorCode QUESTION_BANK_DUPLICATE = new ErrorCode(2116009, "题库中已存在相同或高度重复的题目");
     ErrorCode QUESTION_EXPERIMENT_TIME_INVALID = new ErrorCode(2116010, "实验开始时间必须早于结束时间");
     ErrorCode QUESTION_EXPERIMENT_NOT_EXIST = new ErrorCode(2116011, "A/B实验配置不存在");
@@ -171,6 +181,10 @@ public interface ErrorCodeConstants {
     ErrorCode QUESTION_BANK_OPTIONS_INVALID = new ErrorCode(2116020, "题目选项格式不正确");
     ErrorCode QUESTION_BANK_IMPORT_EMPTY = new ErrorCode(2116021, "A4文件中未识别到题目内容");
     ErrorCode QUESTION_REPORT_DUPLICATE = new ErrorCode(2116022, "该题目问题已提交，请勿重复举报");
+    ErrorCode QUESTION_CONTENT_ISSUE_TYPE_INVALID = new ErrorCode(2116031, "题目问题类型不支持");
+    ErrorCode QUESTION_CONTENT_ACTION_INVALID = new ErrorCode(2116032, "题目内容治理动作不支持");
+    ErrorCode QUESTION_CONTENT_RESTORE_INVALID = new ErrorCode(2116033, "题目未审核通过或授权已到期，不能恢复投放");
+    ErrorCode QUESTION_BANK_VERSION_NOT_EXIST = new ErrorCode(2116034, "题目版本不存在");
 
     // 22-文件服务
     // 2201-文件模块

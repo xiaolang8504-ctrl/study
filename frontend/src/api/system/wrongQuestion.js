@@ -64,6 +64,12 @@ export function batchDeleteWrongQuestion(data) {
   })
 }
 
+export function batchOrganizeWrongQuestion(data) { return request({ url: '/api/wrongQuestion/batchOrganizeWrongQuestion', method: 'post', data }) }
+export function wrongQuestionTagList() { return request({ url: '/api/wrongQuestion/wrongQuestionTagList', method: 'get' }) }
+export function savedWrongQuestionFilterList() { return request({ url: '/api/wrongQuestion/savedWrongQuestionFilterList', method: 'get' }) }
+export function saveWrongQuestionFilter(data) { return request({ url: '/api/wrongQuestion/saveWrongQuestionFilter', method: 'post', data }) }
+export function deleteWrongQuestionFilter(data) { return request({ url: '/api/wrongQuestion/deleteWrongQuestionFilter', method: 'post', data }) }
+
 export function updateWrongQuestionStatus(data) {
   return request({
     url: '/api/wrongQuestion/updateWrongQuestionStatus',
@@ -86,6 +92,26 @@ export function correctionRecordList(params) {
     method: 'get',
     params
   })
+}
+
+export function saveCorrectionDraft(data) {
+  return request({ url: '/api/wrongQuestion/saveCorrectionDraft', method: 'post', data })
+}
+
+export function revealAnswerLayer(data) {
+  return request({ url: '/api/wrongQuestion/revealAnswerLayer', method: 'post', data })
+}
+
+export function scanWrongQuestionDuplicate(data) {
+  return request({ url: '/api/wrongQuestion/scanWrongQuestionDuplicate', method: 'post', data })
+}
+
+export function mergeWrongQuestionDuplicate(data) {
+  return request({ url: '/api/wrongQuestion/mergeWrongQuestionDuplicate', method: 'post', data })
+}
+
+export function undoWrongQuestionMerge(data) {
+  return request({ url: '/api/wrongQuestion/undoWrongQuestionMerge', method: 'post', data })
 }
 
 export function bindWrongQuestionKnowledgePoint(data) {
@@ -125,6 +151,7 @@ export function questionCaptureTaskDetail(params) { return request({ url: '/api/
 export function retryQuestionCaptureTask(data) { return request({ url: '/api/questionCapture/retryQuestionCaptureTask', method: 'post', data }) }
 export function confirmQuestionCapture(data) { return request({ url: '/api/questionCapture/confirmQuestionCapture', method: 'post', data }) }
 export function updateQuestionCaptureRegion(data) { return request({ url: '/api/questionCapture/updateQuestionCaptureRegion', method: 'post', data }) }
+export function batchUpdateQuestionCaptureRegion(data) { return request({ url: '/api/questionCapture/batchUpdateQuestionCaptureRegion', method: 'post', data }) }
 export function createQuestionCaptureRegion(data) { return request({ url: '/api/questionCapture/createQuestionCaptureRegion', method: 'post', data }) }
 export function mergeQuestionCaptureRegion(data) { return request({ url: '/api/questionCapture/mergeQuestionCaptureRegion', method: 'post', data }) }
 export function splitQuestionCaptureRegion(data) { return request({ url: '/api/questionCapture/splitQuestionCaptureRegion', method: 'post', data }) }
@@ -135,4 +162,7 @@ export function restoreQuestionCaptureRegion(data) { return request({ url: '/api
 export function questionCaptureTaskPageList(params) { return request({ url: '/api/questionCapture/questionCaptureTaskPageList', method: 'get', params }) }
 export function retryQuestionCapturePage(data) { return request({ url: '/api/questionCapture/retryQuestionCapturePage', method: 'post', data }) }
 export function saveQuestionCapturePageAsImage(data) { return request({ url: '/api/questionCapture/saveQuestionCapturePageAsImage', method: 'post', data }) }
+export function generateQuestionCaptureCleanImage(data) { return request({ url: '/api/questionCapture/generateQuestionCaptureCleanImage', method: 'post', data }) }
+export function revertQuestionCaptureCleanImage(data) { return request({ url: '/api/questionCapture/revertQuestionCaptureCleanImage', method: 'post', data }) }
+export function applyQuestionCaptureManualCleanImage(data) { return request({ url: '/api/questionCapture/applyQuestionCaptureManualCleanImage', method: 'post', data }) }
 export function questionCaptureDuplicateList(data) { return request({ url: '/api/questionCapture/questionCaptureDuplicateList', method: 'post', data }) }

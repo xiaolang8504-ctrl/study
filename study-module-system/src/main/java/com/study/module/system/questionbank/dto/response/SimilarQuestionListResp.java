@@ -55,6 +55,12 @@ public class SimilarQuestionListResp {
     @ApiModelProperty("推荐实验分组")
     private String experimentGroup;
 
+    @ApiModelProperty("推荐层级：SAME_PATTERN同型变式，CROSS_CONTEXT跨情境应用")
+    private String recommendationLevel;
+
+    @ApiModelProperty("推荐层级名称")
+    private String recommendationLevelName;
+
     @ApiModelProperty("题目图片列表")
     private List<QuestionBankImageListResp> images;
 }

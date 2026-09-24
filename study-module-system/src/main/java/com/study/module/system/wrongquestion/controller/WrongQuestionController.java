@@ -6,7 +6,11 @@ import com.study.module.system.wrongquestion.dto.request.QuestionCaptureTaskCrea
 import com.study.module.system.wrongquestion.dto.request.UpdateWrongQuestionImageReq;
 import com.study.module.system.wrongquestion.dto.request.UpdateWrongQuestionReq;
 import com.study.module.system.wrongquestion.dto.request.WrongQuestionBatchDeleteReq;
+import com.study.module.system.wrongquestion.dto.request.WrongQuestionBatchOrganizeReq;
 import com.study.module.system.wrongquestion.dto.request.WrongQuestionCorrectionRecordReq;
+import com.study.module.system.wrongquestion.dto.request.WrongQuestionCorrectionDraftSaveReq;
+import com.study.module.system.wrongquestion.dto.request.WrongQuestionAnswerLayerRevealReq;
+import com.study.module.system.wrongquestion.dto.request.WrongQuestionDuplicateMergeReq;
 import com.study.module.system.wrongquestion.dto.request.WrongQuestionErrorAnalysisReq;
 import com.study.module.system.wrongquestion.dto.request.WrongQuestionErrorAnalysisStatisticsReq;
 import com.study.module.system.wrongquestion.dto.request.WrongQuestionIdReq;
@@ -14,13 +18,20 @@ import com.study.module.system.wrongquestion.dto.request.WrongQuestionKnowledgeP
 import com.study.module.system.wrongquestion.dto.request.WrongQuestionKnowledgePointStatisticsReq;
 import com.study.module.system.wrongquestion.dto.request.WrongQuestionPageListReq;
 import com.study.module.system.wrongquestion.dto.request.WrongQuestionStatusUpdateReq;
+import com.study.module.system.wrongquestion.dto.request.WrongQuestionSavedFilterSaveReq;
 import com.study.module.system.wrongquestion.dto.response.ImportWrongQuestionImageResp;
 import com.study.module.system.wrongquestion.dto.response.WrongQuestionCorrectionRecordResp;
+import com.study.module.system.wrongquestion.dto.response.WrongQuestionAnswerLayerResp;
+import com.study.module.system.wrongquestion.dto.response.WrongQuestionDuplicateResp;
 import com.study.module.system.wrongquestion.dto.response.WrongQuestionDetailResp;
 import com.study.module.system.wrongquestion.dto.response.WrongQuestionErrorAnalysisStatisticsResp;
 import com.study.module.system.wrongquestion.dto.response.WrongQuestionKnowledgePointStatisticsResp;
 import com.study.module.system.wrongquestion.dto.response.WrongQuestionPageListResp;
+import com.study.module.system.wrongquestion.dto.response.WrongQuestionSavedFilterResp;
+import com.study.module.system.wrongquestion.dto.response.WrongQuestionTagResp;
 import com.study.module.system.wrongquestion.service.WrongQuestionCorrectionRecordService;
+import com.study.module.system.wrongquestion.service.WrongQuestionCorrectionDraftService;
+import com.study.module.system.wrongquestion.service.WrongQuestionDuplicateService;
 import com.study.module.system.wrongquestion.service.WrongQuestionCreateService;
 import com.study.module.system.wrongquestion.service.WrongQuestionDeleteService;
 import com.study.module.system.wrongquestion.service.WrongQuestionDetailService;
@@ -31,6 +42,7 @@ import com.study.module.system.wrongquestion.service.WrongQuestionKnowledgePoint
 import com.study.module.system.wrongquestion.service.WrongQuestionListService;
 import com.study.module.system.wrongquestion.service.WrongQuestionStatusService;
 import com.study.module.system.wrongquestion.service.WrongQuestionUpdateService;
+import com.study.module.system.wrongquestion.service.WrongQuestionOrganizeService;
 import com.study.common.core.domain.Result;
 import com.study.common.core.domain.dto.PageResult;
 import com.study.common.core.enums.ErrorCodeConstants;
@@ -87,10 +99,19 @@ public class WrongQuestionController {
     WrongQuestionCorrectionRecordService wrongQuestionCorrectionRecordService;
 
     @Autowired
+    WrongQuestionCorrectionDraftService wrongQuestionCorrectionDraftService;
+
+    @Autowired
+    WrongQuestionDuplicateService wrongQuestionDuplicateService;
+
+    @Autowired
     WrongQuestionKnowledgePointBindService wrongQuestionKnowledgePointBindService;
 
     @Autowired
     WrongQuestionErrorAnalysisService wrongQuestionErrorAnalysisService;
+
+    @Autowired
+    WrongQuestionOrganizeService wrongQuestionOrganizeService;
 
     /**
      * 错题分页列表
@@ -198,6 +219,48 @@ public class WrongQuestionController {
         return ResultUtils.success(wrongQuestionCorrectionRecordService.correctionRecordList(request.getId()));
     }
 
+    @ApiOperation("自动保存订正草稿")
+    @PreAuthorize("hasAuthority('system:wrongQuestion:submitCorrectionRecord')")
+    @PostMapping("/saveCorrectionDraft")
+    public Result<Void> saveCorrectionDraft(
+            @RequestBody @Validated WrongQuestionCorrectionDraftSaveReq request) {
+        wrongQuestionCorrectionDraftService.saveCorrectionDraft(request);
+        return ResultUtils.success();
+    }
+
+    @ApiOperation("分层查看提示、解析与答案")
+    @PreAuthorize("hasAuthority('system:wrongQuestion:submitCorrectionRecord')")
+    @PostMapping("/revealAnswerLayer")
+    public Result<WrongQuestionAnswerLayerResp> revealAnswerLayer(
+            @RequestBody @Validated WrongQuestionAnswerLayerRevealReq request) {
+        return ResultUtils.success(wrongQuestionCorrectionDraftService.revealAnswerLayer(request));
+    }
+
+    @ApiOperation("扫描当前错题的重复与相似题")
+    @PreAuthorize("hasAuthority('system:wrongQuestion:updateWrongQuestion')")
+    @PostMapping("/scanWrongQuestionDuplicate")
+    public Result<List<WrongQuestionDuplicateResp>> scanWrongQuestionDuplicate(
+            @RequestBody @Validated WrongQuestionIdReq request) {
+        return ResultUtils.success(wrongQuestionDuplicateService.scanWrongQuestionDuplicate(request.getId()));
+    }
+
+    @ApiOperation("合并完全相同的错题来源")
+    @PreAuthorize("hasAuthority('system:wrongQuestion:updateWrongQuestion')")
+    @PostMapping("/mergeWrongQuestionDuplicate")
+    public Result<Void> mergeWrongQuestionDuplicate(
+            @RequestBody @Validated WrongQuestionDuplicateMergeReq request) {
+        wrongQuestionDuplicateService.mergeWrongQuestionDuplicate(request);
+        return ResultUtils.success();
+    }
+
+    @ApiOperation("撤销错题来源归并")
+    @PreAuthorize("hasAuthority('system:wrongQuestion:updateWrongQuestion')")
+    @PostMapping("/undoWrongQuestionMerge")
+    public Result<Void> undoWrongQuestionMerge(@RequestBody @Validated WrongQuestionIdReq request) {
+        wrongQuestionDuplicateService.undoWrongQuestionMerge(request.getId());
+        return ResultUtils.success();
+    }
+
     /**
      * 绑定错题知识点
      */
@@ -240,6 +303,43 @@ public class WrongQuestionController {
     public Result<List<WrongQuestionErrorAnalysisStatisticsResp>> wrongQuestionErrorAnalysisStatistics(
             @Validated WrongQuestionErrorAnalysisStatisticsReq request) {
         return ResultUtils.success(wrongQuestionErrorAnalysisService.wrongQuestionErrorAnalysisStatistics(request));
+    }
+
+    @ApiOperation("批量整理错题")
+    @PreAuthorize("hasAuthority('system:wrongQuestion:updateWrongQuestion')")
+    @PostMapping("/batchOrganizeWrongQuestion")
+    public Result<Void> batchOrganizeWrongQuestion(@RequestBody @Validated WrongQuestionBatchOrganizeReq request) {
+        wrongQuestionOrganizeService.batchOrganizeWrongQuestion(request);
+        return ResultUtils.success();
+    }
+
+    @ApiOperation("错题个人标签列表")
+    @PreAuthorize("hasAuthority('system:wrongQuestion:wrongQuestionPageList')")
+    @GetMapping("/wrongQuestionTagList")
+    public Result<List<WrongQuestionTagResp>> wrongQuestionTagList() {
+        return ResultUtils.success(wrongQuestionOrganizeService.wrongQuestionTagList());
+    }
+
+    @ApiOperation("常用错题筛选列表")
+    @PreAuthorize("hasAuthority('system:wrongQuestion:wrongQuestionPageList')")
+    @GetMapping("/savedWrongQuestionFilterList")
+    public Result<List<WrongQuestionSavedFilterResp>> savedWrongQuestionFilterList() {
+        return ResultUtils.success(wrongQuestionOrganizeService.savedWrongQuestionFilterList());
+    }
+
+    @ApiOperation("保存常用错题筛选")
+    @PreAuthorize("hasAuthority('system:wrongQuestion:updateWrongQuestion')")
+    @PostMapping("/saveWrongQuestionFilter")
+    public Result<Long> saveWrongQuestionFilter(@RequestBody @Validated WrongQuestionSavedFilterSaveReq request) {
+        return ResultUtils.success(wrongQuestionOrganizeService.saveWrongQuestionFilter(request));
+    }
+
+    @ApiOperation("删除常用错题筛选")
+    @PreAuthorize("hasAuthority('system:wrongQuestion:updateWrongQuestion')")
+    @PostMapping("/deleteWrongQuestionFilter")
+    public Result<Void> deleteWrongQuestionFilter(@RequestBody @Validated WrongQuestionIdReq request) {
+        wrongQuestionOrganizeService.deleteWrongQuestionFilter(request.getId());
+        return ResultUtils.success();
     }
 
     /**

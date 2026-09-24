@@ -68,4 +68,7 @@ public class ReviewHomeResp {
 
     @ApiModelProperty("可参与复习的科目")
     private List<ReviewSubjectSettingResp> subjectSettings;
+
+    @ApiModelProperty("按10/20/30分钟组织的今日行动任务包")
+    private List<ReviewTodayActionPackageResp> todayActionPackageList;
 }

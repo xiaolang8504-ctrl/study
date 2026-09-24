@@ -40,6 +40,11 @@ public class QuestionBankListServiceImpl extends ServiceImpl<QuestionBankMapper,
         wrapper.eq(StringUtils.hasText(request.getGrade()), QuestionBank::getGrade, request.getGrade())
                 .eq(StringUtils.hasText(request.getSubject()), QuestionBank::getSubject, request.getSubject())
                 .eq(StringUtils.hasText(request.getQuestionType()), QuestionBank::getQuestionType, request.getQuestionType())
+                .eq(StringUtils.hasText(request.getTextbookVersion()), QuestionBank::getTextbookVersion, request.getTextbookVersion())
+                .like(StringUtils.hasText(request.getChapterName()), QuestionBank::getChapterName, request.getChapterName())
+                .eq(StringUtils.hasText(request.getRegion()), QuestionBank::getRegion, request.getRegion())
+                .eq(request.getExamYear() != null, QuestionBank::getExamYear, request.getExamYear())
+                .eq(StringUtils.hasText(request.getPaperType()), QuestionBank::getPaperType, request.getPaperType())
                 .eq(request.getReviewStatus() != null, QuestionBank::getReviewStatus, request.getReviewStatus())
                 .eq(request.getEnable() != null, QuestionBank::getEnable, request.getEnable());
         if (StringUtils.hasText(request.getKeyWord())) {

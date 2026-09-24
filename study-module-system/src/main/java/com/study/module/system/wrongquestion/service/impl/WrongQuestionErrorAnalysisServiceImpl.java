@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.study.common.core.enums.ErrorCodeConstants;
 import com.study.common.core.exception.LogicException;
 import com.study.module.system.wrongquestion.constants.WrongQuestionStatus;
+import com.study.module.system.wrongquestion.constants.WrongQuestionDiagnosisPolicy;
 import com.study.module.system.wrongquestion.dto.request.WrongQuestionErrorAnalysisReq;
 import com.study.module.system.wrongquestion.dto.request.WrongQuestionErrorAnalysisStatisticsReq;
 import com.study.module.system.wrongquestion.dto.response.WrongQuestionErrorAnalysisStatisticsResp;
@@ -46,9 +47,13 @@ public class WrongQuestionErrorAnalysisServiceImpl extends ServiceImpl<WrongQues
     @Transactional(rollbackFor = Exception.class)
     public void updateWrongQuestionErrorAnalysis(WrongQuestionErrorAnalysisReq request) {
         wrongQuestionService.checkWrongQuestion(request.getId());
+        String errorCauseCodes = WrongQuestionDiagnosisPolicy.normalizeCauseCodes(
+                request.getErrorCauseCodes(), request.getErrorLabels());
         boolean updated = this.lambdaUpdate()
                 .eq(WrongQuestion::getId, request.getId())
-                .set(WrongQuestion::getErrorLabels, normalizeErrorLabels(request.getErrorLabels()))
+                .set(WrongQuestion::getErrorCauseCodes, errorCauseCodes)
+                .set(WrongQuestion::getErrorLabels, normalizeErrorLabels(request.getErrorLabels(), errorCauseCodes))
+                .set(WrongQuestion::getAbilityLevel, request.getAbilityLevel())
                 .set(WrongQuestion::getWrongReason, request.getWrongReason())
                 .set(WrongQuestion::getUpdateTime, LocalDateTime.now())
                 .update();
@@ -66,7 +71,8 @@ public class WrongQuestionErrorAnalysisServiceImpl extends ServiceImpl<WrongQues
         List<WrongQuestion> wrongQuestions = this.list(buildWrongQuestionStatisticsQuery(request));
         Map<String, WrongQuestionErrorAnalysisStatisticsResp> statisticsMap = new java.util.HashMap<>();
         for (WrongQuestion wrongQuestion : wrongQuestions) {
-            for (String errorLabel : parseErrorLabels(wrongQuestion.getErrorLabels())) {
+            for (String errorLabel : parseErrorLabels(wrongQuestion.getErrorLabels(),
+                    wrongQuestion.getErrorCauseCodes())) {
                 WrongQuestionErrorAnalysisStatisticsResp statistics = statisticsMap.computeIfAbsent(
                         errorLabel, this::buildStatistics);
                 increaseStatusCount(statistics, wrongQuestion.getStatus());
@@ -84,7 +90,7 @@ public class WrongQuestionErrorAnalysisServiceImpl extends ServiceImpl<WrongQues
     private LambdaQueryWrapper<WrongQuestion> buildWrongQuestionStatisticsQuery(
             WrongQuestionErrorAnalysisStatisticsReq request) {
         LambdaQueryWrapper<WrongQuestion> queryWrapper = new LambdaQueryWrapper<>();
-        queryWrapper.select(WrongQuestion::getErrorLabels, WrongQuestion::getStatus)
+        queryWrapper.select(WrongQuestion::getErrorLabels, WrongQuestion::getErrorCauseCodes, WrongQuestion::getStatus)
                 .eq(WrongQuestion::getCreateId, AccountUtils.getUserId());
         if (StringUtils.hasText(request.getGrade())) {
             queryWrapper.eq(WrongQuestion::getGrade, request.getGrade());
@@ -101,8 +107,8 @@ public class WrongQuestionErrorAnalysisServiceImpl extends ServiceImpl<WrongQues
     /**
      * 规范化错误标签
      */
-    private String normalizeErrorLabels(String errorLabels) {
-        List<String> labels = parseErrorLabels(errorLabels);
+    private String normalizeErrorLabels(String errorLabels, String errorCauseCodes) {
+        List<String> labels = parseErrorLabels(errorLabels, errorCauseCodes);
         labels.remove(UNMARKED_ERROR_LABEL);
         return String.join(",", labels);
     }
@@ -110,15 +116,21 @@ public class WrongQuestionErrorAnalysisServiceImpl extends ServiceImpl<WrongQues
     /**
      * 解析错误标签
      */
-    private List<String> parseErrorLabels(String errorLabels) {
-        if (StrUtil.isBlank(errorLabels)) {
+    private List<String> parseErrorLabels(String errorLabels, String errorCauseCodes) {
+        List<String> structuredLabels = WrongQuestionDiagnosisPolicy.causeCodes(errorCauseCodes, errorLabels).stream()
+                .map(WrongQuestionDiagnosisPolicy::causeLabel)
+                .filter(StringUtils::hasText)
+                .collect(Collectors.toList());
+        if (StrUtil.isBlank(errorLabels) && structuredLabels.isEmpty()) {
             List<String> labels = new ArrayList<>();
             labels.add(UNMARKED_ERROR_LABEL);
             return labels;
         }
-        return java.util.Arrays.stream(errorLabels.split("[,，]"))
+        structuredLabels.addAll(java.util.Arrays.stream((errorLabels == null ? "" : errorLabels).split("[,，]"))
                 .map(String::trim)
                 .filter(StringUtils::hasText)
+                .collect(Collectors.toList()));
+        return structuredLabels.stream()
                 .collect(Collectors.collectingAndThen(Collectors.toCollection(LinkedHashSet::new), ArrayList::new));
     }
 

@@ -78,6 +78,9 @@ public class GuardianAssistedCaptureServiceImpl extends ServiceImpl<GuardianAssi
         if (capture == null || !studentUserId.equals(capture.getStudentUserId())) {
             throw new LogicException(ErrorCodeConstants.GUARDIAN_ASSISTED_CAPTURE_NOT_EXIST);
         }
+        if (!guardianBindingService.hasActiveBinding(studentUserId, capture.getGuardianUserId())) {
+            throw new LogicException(ErrorCodeConstants.GUARDIAN_BINDING_NOT_EXIST);
+        }
         if (!Integer.valueOf(PENDING_STUDENT_CONFIRM).equals(capture.getStatus())) {
             throw new LogicException(ErrorCodeConstants.GUARDIAN_ASSISTED_CAPTURE_STATUS_INVALID);
         }
@@ -103,7 +106,9 @@ public class GuardianAssistedCaptureServiceImpl extends ServiceImpl<GuardianAssi
     public void revokeGuardianAssistedCapture(Long id) {
         Long userId = AccountUtils.getUserId();
         GuardianAssistedCapture capture = getById(id);
-        if (capture == null || (!userId.equals(capture.getGuardianUserId()) && !userId.equals(capture.getStudentUserId()))) {
+        if (capture == null || (!userId.equals(capture.getStudentUserId())
+                && (!userId.equals(capture.getGuardianUserId())
+                || !guardianBindingService.hasActiveBinding(capture.getStudentUserId(), userId)))) {
             throw new LogicException(ErrorCodeConstants.GUARDIAN_ASSISTED_CAPTURE_NOT_EXIST);
         }
         if (!Integer.valueOf(PENDING_STUDENT_CONFIRM).equals(capture.getStatus())) {
@@ -118,9 +123,14 @@ public class GuardianAssistedCaptureServiceImpl extends ServiceImpl<GuardianAssi
     @Override
     public List<GuardianAssistedCaptureResp> guardianAssistedCaptureList() {
         Long userId = AccountUtils.getUserId();
-        return list(new LambdaQueryWrapper<GuardianAssistedCapture>().and(wrapper -> wrapper
-                .eq(GuardianAssistedCapture::getStudentUserId, userId).or()
-                .eq(GuardianAssistedCapture::getGuardianUserId, userId)).orderByDesc(GuardianAssistedCapture::getCreateTime))
+        List<Long> activeStudentIds = guardianBindingService.activeStudentIdsOfCurrentGuardian();
+        LambdaQueryWrapper<GuardianAssistedCapture> query = new LambdaQueryWrapper<GuardianAssistedCapture>()
+                .eq(GuardianAssistedCapture::getStudentUserId, userId);
+        if (!activeStudentIds.isEmpty()) {
+            query.or(wrapper -> wrapper.eq(GuardianAssistedCapture::getGuardianUserId, userId)
+                    .in(GuardianAssistedCapture::getStudentUserId, activeStudentIds));
+        }
+        return list(query.orderByDesc(GuardianAssistedCapture::getCreateTime))
                 .stream().map(capture -> toResp(capture)).collect(Collectors.toList());
     }
 

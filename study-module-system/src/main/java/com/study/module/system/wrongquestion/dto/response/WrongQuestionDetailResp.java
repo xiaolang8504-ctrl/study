@@ -40,6 +40,12 @@ public class WrongQuestionDetailResp {
     @ApiModelProperty("题目内容")
     private String questionContent;
 
+    @ApiModelProperty("内容格式：TEXT、LATEX、RICH_TEXT")
+    private String contentFormat;
+
+    @ApiModelProperty("结构化选项JSON")
+    private String optionsJson;
+
     @ApiModelProperty("错误答案")
     private String wrongAnswer;
 
@@ -52,6 +58,15 @@ public class WrongQuestionDetailResp {
     @ApiModelProperty("题目解析")
     private String analysis;
 
+    @ApiModelProperty("关键提示")
+    private String keyHint;
+
+    @ApiModelProperty("分步解题过程")
+    private String solutionSteps;
+
+    @ApiModelProperty("本题常见易错点")
+    private String commonMistake;
+
     @ApiModelProperty("知识点")
     private String learningPoint;
 
@@ -63,6 +78,12 @@ public class WrongQuestionDetailResp {
 
     @ApiModelProperty("错误类型标签")
     private String errorLabels;
+
+    @ApiModelProperty("结构化错因编码")
+    private String errorCauseCodes;
+
+    @ApiModelProperty("能力层级：FOUNDATION、APPLICATION、COMPREHENSIVE")
+    private String abilityLevel;
 
     @ApiModelProperty("来源字典键值")
     private String source;
@@ -95,6 +116,23 @@ public class WrongQuestionDetailResp {
     private Integer captureTopPosition;
     private Integer captureWidth;
     private Integer captureHeight;
+    @ApiModelProperty("采集原图文件ID")
+    private Long captureOriginalFileId;
+    @ApiModelProperty("采集清理图文件ID")
+    private Long captureCleanedFileId;
+    @ApiModelProperty("题块使用的图像类型：ORIGINAL、CLEANED")
+    private String captureImageMode;
+
+    @ApiModelProperty("教材版本")
+    private String textbookVersion;
+    @ApiModelProperty("章节")
+    private String chapterName;
+    @ApiModelProperty("个人标签")
+    private List<String> tagNames;
+    @ApiModelProperty("是否收藏：0否，1是")
+    private Integer favorite;
+    @ApiModelProperty("整理优先级：0-5")
+    private Integer priorityLevel;
 
     @ApiModelProperty("状态: 0待改, 1已改, 2已掌握, 3已归档")
     private Integer status;
@@ -107,6 +145,15 @@ public class WrongQuestionDetailResp {
 
     @ApiModelProperty("学习证据时间线")
     private List<WrongQuestionTimelineResp> timelineList;
+
+    @ApiModelProperty("有序题目素材")
+    private List<WrongQuestionAssetResp> assetList;
+
+    @ApiModelProperty("未提交的订正草稿")
+    private WrongQuestionCorrectionDraftResp correctionDraft;
+
+    @ApiModelProperty("同一道题的错误来源")
+    private List<WrongQuestionOccurrenceResp> occurrenceList;
 
     @ApiModelProperty("创建时间")
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")

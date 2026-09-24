@@ -30,4 +30,25 @@ public class WrongQuestionPageListReq extends PageParam {
 
     @ApiModelProperty("错误类型标签")
     private String errorLabel;
+
+    @ApiModelProperty("结构化错因编码：READING、CONCEPT、METHOD、CALCULATION、EXPRESSION")
+    private String errorCauseCode;
+
+    @ApiModelProperty("能力层级：FOUNDATION、APPLICATION、COMPREHENSIVE")
+    private String abilityLevel;
+
+    @ApiModelProperty("教材版本")
+    private String textbookVersion;
+
+    @ApiModelProperty("章节")
+    private String chapterName;
+
+    @ApiModelProperty("个人标签")
+    private String tagName;
+
+    @ApiModelProperty("是否收藏：0否，1是")
+    private Integer favorite;
+
+    @ApiModelProperty("整理优先级：0-5")
+    private Integer priorityLevel;
 }

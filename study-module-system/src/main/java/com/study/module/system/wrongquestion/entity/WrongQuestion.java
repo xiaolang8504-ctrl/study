@@ -57,6 +57,18 @@ public class WrongQuestion {
      */
     private String questionContent;
 
+    /** 内容格式：TEXT、LATEX、RICH_TEXT。 */
+    private String contentFormat;
+
+    /** 结构化选项JSON。 */
+    private String optionsJson;
+
+    /** 规范化题干指纹。 */
+    private String questionFingerprint;
+
+    /** 合并后的主错题ID。 */
+    private Long mergedToId;
+
     /**
      * 错误答案
      */
@@ -76,6 +88,21 @@ public class WrongQuestion {
      * 题目解析
      */
     private String analysis;
+
+    /**
+     * 解题关键提示。仅给出思考方向，不直接给出结果。
+     */
+    private String keyHint;
+
+    /**
+     * 分步解题过程。
+     */
+    private String solutionSteps;
+
+    /**
+     * 本题常见易错点。
+     */
+    private String commonMistake;
 
     /**
      * 默认题目图片地址，选择题时为A选项图片地址
@@ -108,6 +135,24 @@ public class WrongQuestion {
     private Integer captureTopPosition;
     private Integer captureWidth;
     private Integer captureHeight;
+    /** 采集页面原图文件ID，用于原图与清理图始终可追溯。 */
+    private Long captureOriginalFileId;
+    /** 确认时可用的清理页面文件ID。 */
+    private Long captureCleanedFileId;
+    /** 题块裁剪来源：ORIGINAL、CLEANED。 */
+    private String captureImageMode;
+
+    /** 教材版本，例如人教版、北师大版。 */
+    private String textbookVersion;
+
+    /** 教材章节名称，暂以学生可编辑文本保存。 */
+    private String chapterName;
+
+    /** 是否收藏：0否，1是。 */
+    private Integer favorite;
+
+    /** 学生整理优先级：0普通，1-5逐步提高。 */
+    private Integer priorityLevel;
 
     /**
      * 知识点
@@ -118,6 +163,16 @@ public class WrongQuestion {
      * 错误类型标签
      */
     private String errorLabels;
+
+    /**
+     * 结构化错因编码：READING、CONCEPT、METHOD、CALCULATION、EXPRESSION，多个用逗号分隔。
+     */
+    private String errorCauseCodes;
+
+    /**
+     * 能力层级：FOUNDATION基础、APPLICATION应用、COMPREHENSIVE综合。
+     */
+    private String abilityLevel;
 
     /**
      * 错题难度等级，数值越大优先级越高

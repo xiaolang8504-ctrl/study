@@ -6,6 +6,10 @@ import com.study.common.core.exception.LogicException;
 import com.study.module.system.questionbank.dto.request.QuestionBankReviewReq;
 import com.study.module.system.questionbank.entity.QuestionBank;
 import com.study.module.system.questionbank.mapper.QuestionBankMapper;
+import com.study.module.system.questionvariant.mapper.QuestionVariantRecordMapper;
+import com.study.module.system.questionvariant.entity.QuestionVariantRecord;
+import com.study.module.system.questionvariant.entity.QuestionVariantAudit;
+import com.study.module.system.questionvariant.mapper.QuestionVariantAuditMapper;
 import com.study.module.system.questionbank.service.QuestionBankReviewService;
 import com.study.module.system.questionbank.service.QuestionBankHistoryService;
 import com.yunshang.budget.common.security.utils.AccountUtils;
@@ -25,6 +29,12 @@ public class QuestionBankReviewServiceImpl extends ServiceImpl<QuestionBankMappe
     @Autowired
     QuestionBankHistoryService questionBankHistoryService;
 
+    @Autowired
+    QuestionVariantRecordMapper questionVariantRecordMapper;
+
+    @Autowired
+    QuestionVariantAuditMapper questionVariantAuditMapper;
+
     /**
      * 审核题库题目
      */
@@ -43,6 +53,22 @@ public class QuestionBankReviewServiceImpl extends ServiceImpl<QuestionBankMappe
         entity.setUpdateTime(LocalDateTime.now());
         if (!updateById(entity)) {
             throw new LogicException(ErrorCodeConstants.QUESTION_BANK_REVIEW_FAIL);
+        }
+        if (entity.getVariantRecordId() != null) {
+            QuestionVariantRecord record = questionVariantRecordMapper.selectById(entity.getVariantRecordId());
+            if (record != null) {
+                record.setAuditStatus(request.getReviewStatus());
+                record.setUpdateTime(LocalDateTime.now());
+                questionVariantRecordMapper.updateById(record);
+                QuestionVariantAudit audit = new QuestionVariantAudit();
+                audit.setVariantRecordId(record.getId());
+                audit.setAuditAction(request.getReviewStatus() == 1 ? "PASS" : "REJECT");
+                audit.setAuditStatus(request.getReviewStatus());
+                audit.setAuditRemark(request.getReviewRemark());
+                audit.setAuditorId(reviewerId);
+                audit.setAuditTime(LocalDateTime.now());
+                questionVariantAuditMapper.insert(audit);
+            }
         }
         questionBankHistoryService.createReviewLog(request, reviewerId);
     }

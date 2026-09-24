@@ -9,5 +9,7 @@ public class QuestionCaptureRegionUpdateReq {
     @NotNull(message = "题块ID不能为空") private Long id;
     private String questionTitle; private String questionContent; private String wrongAnswer; private String correctAnswer; private String wrongReason; private String analysis;
     private String grade; private String subject; private String questionType; private String source; private String learningPoint; private String errorLabels;
+    /** 题块确认后使用原图或已完成的去笔迹图：ORIGINAL、CLEANED。 */
+    private String cleanImageMode;
     private Integer leftPosition; private Integer topPosition; private Integer width; private Integer height;
 }

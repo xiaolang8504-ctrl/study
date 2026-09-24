@@ -11,6 +11,10 @@ import com.study.module.system.wrongquestion.service.WrongQuestionCorrectionReco
 import com.study.module.system.wrongquestion.service.WrongQuestionDetailService;
 import com.study.module.system.wrongquestion.service.WrongQuestionService;
 import com.study.module.system.wrongquestion.service.WrongQuestionTimelineService;
+import com.study.module.system.wrongquestion.service.WrongQuestionAssetService;
+import com.study.module.system.wrongquestion.service.WrongQuestionCorrectionDraftService;
+import com.study.module.system.wrongquestion.service.WrongQuestionDuplicateService;
+import com.study.module.system.wrongquestion.service.WrongQuestionOrganizeService;
 import com.study.module.system.questionbank.service.WrongQuestionKnowledgePointService;
 import com.study.module.system.questionbank.service.KnowledgePointService;
 import com.study.api.provider.FileProvider;
@@ -46,6 +50,18 @@ public class WrongQuestionDetailServiceImpl extends ServiceImpl<WrongQuestionMap
     @Autowired
     WrongQuestionTimelineService wrongQuestionTimelineService;
 
+    @Autowired
+    WrongQuestionAssetService wrongQuestionAssetService;
+
+    @Autowired
+    WrongQuestionCorrectionDraftService wrongQuestionCorrectionDraftService;
+
+    @Autowired
+    WrongQuestionDuplicateService wrongQuestionDuplicateService;
+
+    @Autowired
+    WrongQuestionOrganizeService wrongQuestionOrganizeService;
+
     @DubboReference
     FileProvider fileProvider;
 
@@ -60,14 +76,22 @@ public class WrongQuestionDetailServiceImpl extends ServiceImpl<WrongQuestionMap
         response.setKnowledgePointIds(pointIds);
         response.setKnowledgePointNames(pointIds.isEmpty() ? java.util.Collections.emptyList()
                 : knowledgePointService.listByIds(pointIds).stream().map(item -> item.getPointName()).collect(Collectors.toList()));
+        response.setTagNames(wrongQuestionOrganizeService.resolveTagNames(
+                java.util.Collections.singletonList(id)).getOrDefault(id, java.util.Collections.emptyList()));
         response.setQuestionContent(resolveContentImageUrl(response.getQuestionContent(), wrongQuestion.getCreateId()));
         response.setWrongAnswer(resolveContentImageUrl(response.getWrongAnswer(), wrongQuestion.getCreateId()));
         response.setCorrectAnswer(resolveContentImageUrl(response.getCorrectAnswer(), wrongQuestion.getCreateId()));
         response.setWrongReason(resolveContentImageUrl(response.getWrongReason(), wrongQuestion.getCreateId()));
+        response.setKeyHint(resolveContentImageUrl(response.getKeyHint(), wrongQuestion.getCreateId()));
+        response.setSolutionSteps(resolveContentImageUrl(response.getSolutionSteps(), wrongQuestion.getCreateId()));
+        response.setCommonMistake(resolveContentImageUrl(response.getCommonMistake(), wrongQuestion.getCreateId()));
         response.setAnalysis(resolveContentImageUrl(response.getAnalysis(), wrongQuestion.getCreateId()));
         response.setLatestCorrectionRecord(wrongQuestionCorrectionRecordService.latestCorrectionRecord(id));
         response.setCorrectionRecordList(wrongQuestionCorrectionRecordService.correctionRecordList(id));
         response.setTimelineList(wrongQuestionTimelineService.timelineList(id));
+        response.setAssetList(wrongQuestionAssetService.wrongQuestionAssetList(id));
+        response.setCorrectionDraft(wrongQuestionCorrectionDraftService.correctionDraftDetail(id));
+        response.setOccurrenceList(wrongQuestionDuplicateService.wrongQuestionOccurrenceList(id));
         return response;
     }
 

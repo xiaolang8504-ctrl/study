@@ -11,6 +11,7 @@ import com.study.module.system.questionbank.dto.response.QuestionBankPageListRes
 import com.study.module.system.questionbank.dto.response.QuestionBankVersionListResp;
 import com.study.module.system.questionbank.dto.response.QuestionBankReviewHistoryResp;
 import com.study.module.system.questionbank.dto.response.QuestionBankImportResp;
+import com.study.module.system.questionbank.dto.response.QuestionContentGovernanceResp;
 import com.study.module.system.questionbank.service.QuestionBankDeleteService;
 import com.study.module.system.questionbank.service.QuestionBankDuplicateService;
 import com.study.module.system.questionbank.service.QuestionBankDetailService;
@@ -20,6 +21,7 @@ import com.study.module.system.questionbank.service.QuestionBankSaveService;
 import com.study.module.system.questionbank.service.QuestionBankHistoryService;
 import com.study.module.system.questionbank.service.QuestionBankImportService;
 import com.study.module.system.questionbank.service.QuestionBankBatchReviewService;
+import com.study.module.system.questionbank.service.QuestionContentGovernanceService;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -62,6 +64,9 @@ public class QuestionBankController {
 
     @Autowired
     QuestionBankBatchReviewService questionBankBatchReviewService;
+
+    @Autowired
+    QuestionContentGovernanceService questionContentGovernanceService;
 
     @ApiOperation("题库分页列表")
     @PreAuthorize("hasAuthority('system:questionBank:questionBankPageList')")
@@ -189,6 +194,29 @@ public class QuestionBankController {
     public Result<Void> batchReviewQuestionBank(@RequestBody @Validated QuestionBankBatchReviewReq request) {
         questionBankBatchReviewService.batchReviewQuestionBank(request);
         return ResultUtils.success();
+    }
+
+    @ApiOperation("登记题目内容治理、版权凭证或授权变更")
+    @PreAuthorize("hasAuthority('system:questionBank:governQuestionContent')")
+    @PostMapping("/governQuestionContent")
+    public Result<Void> governQuestionContent(@RequestBody @Validated QuestionContentGovernanceReq request) {
+        questionContentGovernanceService.governQuestionContent(request);
+        return ResultUtils.success();
+    }
+
+    @ApiOperation("回退题目到历史版本")
+    @PreAuthorize("hasAuthority('system:questionBank:rollbackQuestionBankVersion')")
+    @PostMapping("/rollbackQuestionBankVersion")
+    public Result<Void> rollbackQuestionBankVersion(@RequestBody @Validated QuestionBankVersionRollbackReq request) {
+        questionContentGovernanceService.rollbackQuestionBankVersion(request);
+        return ResultUtils.success();
+    }
+
+    @ApiOperation("题目内容治理记录")
+    @PreAuthorize("hasAuthority('system:questionBank:questionContentGovernanceList')")
+    @GetMapping("/questionContentGovernanceList")
+    public Result<List<QuestionContentGovernanceResp>> questionContentGovernanceList(@Validated QuestionBankIdReq request) {
+        return ResultUtils.success(questionContentGovernanceService.questionContentGovernanceList(request.getId()));
     }
 
 }

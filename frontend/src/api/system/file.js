@@ -8,11 +8,12 @@ export function filePolicy(params) {
   })
 }
 
-export function uploadFile(data) {
+export function uploadFile(data, onUploadProgress) {
   return request({
     url: '/api/file/uploadFile',
     method: 'post',
     data,
+    onUploadProgress,
     headers: {
       'Content-Type': 'multipart/form-data'
     }

@@ -6,12 +6,14 @@ import com.study.common.core.utils.ResultUtils;
 import com.study.module.system.wrongquestion.dto.request.QuestionCaptureConfirmReq;
 import com.study.module.system.wrongquestion.dto.request.QuestionCaptureDuplicateCheckReq;
 import com.study.module.system.wrongquestion.dto.request.QuestionCapturePageIdReq;
+import com.study.module.system.wrongquestion.dto.request.QuestionCaptureManualCleanReq;
 import com.study.module.system.wrongquestion.dto.request.QuestionCaptureRegionIdsReq;
 import com.study.module.system.wrongquestion.dto.request.QuestionCaptureRegionIdReq;
 import com.study.module.system.wrongquestion.dto.request.QuestionCaptureRegionCreateReq;
 import com.study.module.system.wrongquestion.dto.request.QuestionCaptureRegionSplitReq;
 import com.study.module.system.wrongquestion.dto.request.QuestionCaptureRegionSnapshotReq;
 import com.study.module.system.wrongquestion.dto.request.QuestionCaptureRegionUpdateReq;
+import com.study.module.system.wrongquestion.dto.request.QuestionCaptureRegionBatchUpdateReq;
 import com.study.module.system.wrongquestion.dto.request.QuestionCaptureTaskCreateReq;
 import com.study.module.system.wrongquestion.dto.request.QuestionCaptureTaskIdReq;
 import com.study.module.system.wrongquestion.dto.request.QuestionCaptureTaskPageListReq;
@@ -92,6 +94,14 @@ public class QuestionCaptureController {
     @PostMapping("/updateQuestionCaptureRegion")
     public Result<Void> updateQuestionCaptureRegion(@RequestBody @Validated QuestionCaptureRegionUpdateReq request) {
         questionCaptureService.updateQuestionCaptureRegion(request);
+        return ResultUtils.success();
+    }
+
+    @ApiOperation("批量设置待确认题块的归类信息")
+    @PreAuthorize("hasAuthority('system:wrongQuestion:updateQuestionCaptureRegion')")
+    @PostMapping("/batchUpdateQuestionCaptureRegion")
+    public Result<Void> batchUpdateQuestionCaptureRegion(@RequestBody @Validated QuestionCaptureRegionBatchUpdateReq request) {
+        questionCaptureService.batchUpdateQuestionCaptureRegion(request);
         return ResultUtils.success();
     }
 
@@ -188,6 +198,31 @@ public class QuestionCaptureController {
     @PostMapping("/saveQuestionCapturePageAsImage")
     public Result<Void> saveQuestionCapturePageAsImage(@RequestBody @Validated QuestionCapturePageIdReq request) {
         questionCaptureService.saveQuestionCapturePageAsImage(request.getId());
+        return ResultUtils.success();
+    }
+
+    @ApiOperation("生成采集页面去笔迹图")
+    @PreAuthorize("hasAuthority('system:wrongQuestion:updateQuestionCaptureRegion')")
+    @PostMapping("/generateQuestionCaptureCleanImage")
+    public Result<Void> generateQuestionCaptureCleanImage(@RequestBody @Validated QuestionCapturePageIdReq request) {
+        questionCaptureService.generateQuestionCaptureCleanImage(request.getId());
+        return ResultUtils.success();
+    }
+
+    @ApiOperation("回退采集页面原图")
+    @PreAuthorize("hasAuthority('system:wrongQuestion:updateQuestionCaptureRegion')")
+    @PostMapping("/revertQuestionCaptureCleanImage")
+    public Result<Void> revertQuestionCaptureCleanImage(@RequestBody @Validated QuestionCapturePageIdReq request) {
+        questionCaptureService.revertQuestionCaptureCleanImage(request.getId());
+        return ResultUtils.success();
+    }
+
+    /** 复用题块编辑权限；服务层同时校验任务及上传文件均属于当前学生。 */
+    @ApiOperation("应用采集页面人工遮罩图")
+    @PreAuthorize("hasAuthority('system:wrongQuestion:updateQuestionCaptureRegion')")
+    @PostMapping("/applyQuestionCaptureManualCleanImage")
+    public Result<Void> applyQuestionCaptureManualCleanImage(@RequestBody @Validated QuestionCaptureManualCleanReq request) {
+        questionCaptureService.applyQuestionCaptureManualCleanImage(request.getId(), request.getCleanedFileId());
         return ResultUtils.success();
     }
 

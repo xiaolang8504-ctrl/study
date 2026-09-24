@@ -3,6 +3,7 @@ import com.study.module.system.wrongquestion.dto.request.QuestionCaptureConfirmR
 import com.study.module.system.wrongquestion.dto.request.QuestionCaptureDuplicateCheckReq;
 import com.study.module.system.wrongquestion.dto.request.QuestionCaptureTaskCreateReq;
 import com.study.module.system.wrongquestion.dto.request.QuestionCaptureRegionUpdateReq;
+import com.study.module.system.wrongquestion.dto.request.QuestionCaptureRegionBatchUpdateReq;
 import com.study.module.system.wrongquestion.dto.request.QuestionCaptureRegionIdsReq;
 import com.study.module.system.wrongquestion.dto.request.QuestionCaptureRegionCreateReq;
 import com.study.module.system.wrongquestion.dto.request.QuestionCaptureRegionSplitReq;
@@ -48,6 +49,11 @@ public interface QuestionCaptureService {
     void updateQuestionCaptureRegion(QuestionCaptureRegionUpdateReq request);
 
     /**
+     * 批量设置待确认题块的归类信息。
+     */
+    void batchUpdateQuestionCaptureRegion(QuestionCaptureRegionBatchUpdateReq request);
+
+    /**
      * 人工补充遗漏题块。
      */
     void createQuestionCaptureRegion(QuestionCaptureRegionCreateReq request);
@@ -91,6 +97,15 @@ public interface QuestionCaptureService {
      * OCR 无法使用时，将一页原图降级为可人工确认的整页题块。
      */
     void saveQuestionCapturePageAsImage(Long id);
+
+    /** 请求对当前学生的一页试卷生成可回退的去笔迹图片。 */
+    void generateQuestionCaptureCleanImage(Long id);
+
+    /** 放弃当前页的去笔迹版本，确认与裁剪恢复使用原图。 */
+    void revertQuestionCaptureCleanImage(Long id);
+
+    /** 使用当前学生上传的人工遮罩整页图替换当前清理版本，原图保持可回退。 */
+    void applyQuestionCaptureManualCleanImage(Long id, Long cleanedFileId);
 
     /**
      * 确认前检查当前学生是否已有题干完全相同的错题。

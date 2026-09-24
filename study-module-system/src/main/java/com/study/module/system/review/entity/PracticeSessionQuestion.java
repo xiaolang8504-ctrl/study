@@ -55,6 +55,13 @@ public class PracticeSessionQuestion {
      */
     private String questionTitleSnapshot;
 
+    private String questionContentSnapshot;
+    private String contentFormatSnapshot;
+    private String optionsJsonSnapshot;
+    private String assetSnapshotJson;
+    private String correctAnswerSnapshot;
+    private String analysisSnapshot;
+
     /**
      * 入选依据快照
      */

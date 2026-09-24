@@ -52,6 +52,41 @@ public class WrongQuestionPageListResp {
     @ApiModelProperty("错误类型标签")
     private String errorLabels;
 
+    @ApiModelProperty("结构化错因编码")
+    private String errorCauseCodes;
+
+    @ApiModelProperty("能力层级：FOUNDATION、APPLICATION、COMPREHENSIVE")
+    private String abilityLevel;
+
+    @ApiModelProperty("教材版本")
+    private String textbookVersion;
+
+    @ApiModelProperty("章节")
+    private String chapterName;
+
+    @ApiModelProperty("个人标签")
+    private List<String> tagNames;
+
+    @ApiModelProperty("是否收藏：0否，1是")
+    private Integer favorite;
+
+    @ApiModelProperty("整理优先级：0-5")
+    private Integer priorityLevel;
+
+    @ApiModelProperty("累计错误次数")
+    private Integer wrongOccurrenceCount;
+
+    @ApiModelProperty("最近错误时间")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime latestWrongTime;
+
+    @ApiModelProperty("最近订正时间")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime latestCorrectionTime;
+
+    @ApiModelProperty("当前复习状态")
+    private String reviewStatus;
+
     @ApiModelProperty("来源字典键值")
     private String source;
 

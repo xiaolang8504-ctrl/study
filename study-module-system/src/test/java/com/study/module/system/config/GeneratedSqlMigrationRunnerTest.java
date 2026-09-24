@@ -21,6 +21,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 
 /**
@@ -78,6 +79,18 @@ class GeneratedSqlMigrationRunnerTest {
 
         assertThrows(IllegalStateException.class,
                 () -> ReflectionTestUtils.invokeMethod(runner, "executeIfNecessary", currentScriptResource()));
+    }
+
+    @Test
+    void mysqlCompatibleMigrationCreatesOnlyMissingObjects() {
+        GeneratedSqlMigrationRunner runner = new GeneratedSqlMigrationRunner(
+                jdbcTemplate, dataSource, resourceService);
+        when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class))).thenReturn(0, 1);
+
+        ReflectionTestUtils.invokeMethod(runner, "ensureReviewIndependentAnswerSchema");
+
+        verify(jdbcTemplate).execute(org.mockito.ArgumentMatchers.startsWith("ALTER TABLE `sys_review_record`"));
+        verify(jdbcTemplate, never()).execute(org.mockito.ArgumentMatchers.startsWith("CREATE INDEX"));
     }
 
     private void mockAuditInsert() {

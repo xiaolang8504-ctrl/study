@@ -4,6 +4,7 @@ import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 专项练习题目响应
@@ -61,6 +62,9 @@ public class PracticeQuestionResp {
 
     @ApiModelProperty("D选项图片")
     private String imageUrl4;
+
+    @ApiModelProperty("在线作答、打印和文档导出共用的题图素材")
+    private List<PracticeQuestionImageResp> paperImageList;
 
     @ApiModelProperty("内容格式")
     private String contentFormat;

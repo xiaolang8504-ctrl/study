@@ -31,4 +31,7 @@ public class PracticeSessionPreviewResp {
 
     @ApiModelProperty("组卷规则说明")
     private String generationReason;
+
+    @ApiModelProperty("按当前题序返回的题目")
+    private List<PracticeSessionPreviewQuestionResp> questionList;
 }

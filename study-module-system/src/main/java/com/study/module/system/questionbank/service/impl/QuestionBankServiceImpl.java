@@ -51,6 +51,17 @@ public class QuestionBankServiceImpl extends ServiceImpl<QuestionBankMapper, Que
     }
 
     /**
+     * 查询同知识点的跨情境候选题。
+     */
+    @Override
+    public List<QuestionBank> selectKnowledgeContextCandidates(Long userId, String grade, String subject,
+                                                                String sourceQuestionType, Integer difficulty,
+                                                                List<Long> pointIds, Integer limit) {
+        return baseMapper.selectKnowledgeContextCandidates(userId, grade, subject, sourceQuestionType,
+                difficulty, pointIds, limit);
+    }
+
+    /**
      * 查询文本相似的推荐候选题
      */
     @Override

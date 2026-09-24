@@ -19,6 +19,12 @@ public class QuestionBankPageListReq extends PageParam {
     @ApiModelProperty("题型字典键值")
     private String questionType;
 
+    private String textbookVersion;
+    private String chapterName;
+    private String region;
+    private Integer examYear;
+    private String paperType;
+
     @ApiModelProperty("审核状态")
     private Integer reviewStatus;
 

@@ -29,7 +29,7 @@ import java.util.stream.Collectors;
         if (!"PDF".equals(format) && !"DOCX".equals(format)) throw new LogicException(ErrorCodeConstants.PRACTICE_PAPER_EXPORT_FORMAT_INVALID);
         Long userId = AccountUtils.getUserId();
         PracticeSessionDetailResp paper = practiceSessionDetailService.practicePaperDetail(request.getSessionId());
-        PracticePaperExportTask task = new PracticePaperExportTask(); task.setUserId(userId); task.setSessionId(request.getSessionId()); task.setFormat(format); task.setAnswerMode(request.getAnswerMode()); task.setStatus(0); task.setCreateTime(LocalDateTime.now()); task.setUpdateTime(LocalDateTime.now());
+        PracticePaperExportTask task = new PracticePaperExportTask(); task.setUserId(userId); task.setSessionId(request.getSessionId()); task.setPaperVersion(paper.getPaperVersion()); task.setFormat(format); task.setAnswerMode(request.getAnswerMode()); task.setStatus(0); task.setCreateTime(LocalDateTime.now()); task.setUpdateTime(LocalDateTime.now());
         save(task); practicePaperExportAsyncService.generatePracticePaper(task.getId(), userId, paper, format, request.getAnswerMode()); return task.getId();
     }
     @Override public List<PracticePaperExportTaskResp> practicePaperExportTaskList() { return list(new LambdaQueryWrapper<PracticePaperExportTask>().eq(PracticePaperExportTask::getUserId, AccountUtils.getUserId()).orderByDesc(PracticePaperExportTask::getId).last("LIMIT 100")).stream().map(item -> { PracticePaperExportTaskResp response = new PracticePaperExportTaskResp(); BeanUtils.copyProperties(item, response); return response; }).collect(Collectors.toList()); }

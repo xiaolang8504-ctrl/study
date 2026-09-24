@@ -3,12 +3,12 @@ package com.study.module.system.review.service.impl;
 import com.study.module.system.review.dto.response.ReviewHomeResp;
 import com.study.module.system.review.dto.response.ReviewTodayHomeResp;
 import com.study.module.system.review.dto.response.ReviewTodayTaskResp;
-import com.study.module.system.review.constants.ReviewDefault;
 import com.study.module.system.review.entity.ReviewPlan;
 import com.study.module.system.review.service.ReviewHomeService;
 import com.study.module.system.review.service.ReviewPlanService;
 import com.study.module.system.review.service.ReviewTodayTaskListService;
 import com.study.module.system.review.service.ReviewTodayService;
+import com.study.module.system.review.service.ReviewPlanExplanationService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -33,11 +33,22 @@ public class ReviewTodayServiceImpl implements ReviewTodayService {
     @Autowired
     ReviewTodayTaskListService reviewTodayTaskListService;
 
+    @Autowired
+    ReviewPlanExplanationService reviewPlanExplanationService;
+
     /**
      * 查询今日复习首页
      */
     @Override
     public ReviewTodayHomeResp todayReviewHome(String subject) {
+        return todayReviewHome(subject, null);
+    }
+
+    /**
+     * 查询今日复习首页；时间任务包只获取当前优先级最高的指定题数。
+     */
+    @Override
+    public ReviewTodayHomeResp todayReviewHome(String subject, Integer taskLimit) {
         // 初始化计划并汇总今日统计，确保新订正的错题能够及时进入复习队列。
         ReviewHomeResp reviewHome = reviewHomeService.initializeReviewHome(subject);
         LocalDate today = LocalDate.now();
@@ -45,6 +56,14 @@ public class ReviewTodayServiceImpl implements ReviewTodayService {
         ReviewPlan reviewPlan = reviewPlanService.getById(reviewHome.getPlanId());
         List<ReviewTodayTaskResp> taskList = reviewTodayTaskListService.todayReviewTaskList(
                 reviewPlan, subject, today, currentTime);
+        if (taskLimit != null) {
+            int limit = Math.max(0, Math.min(taskLimit, taskList.size()));
+            taskList = taskList.subList(0, limit);
+        }
+        int estimatedMinutesPerQuestion = reviewPlanExplanationService
+                .estimatedMinutesPerQuestion(reviewPlan.getUserId(), reviewHome.getSelectedSubject());
+        taskList.forEach(task -> reviewPlanExplanationService.explainTask(task,
+                estimatedMinutesPerQuestion, today, currentTime));
         long remainingCount = taskList.size();
         long todayTaskCount = reviewHome.getCompletedCount() + remainingCount;
 
@@ -54,8 +73,7 @@ public class ReviewTodayServiceImpl implements ReviewTodayService {
         response.setCompletedCount(reviewHome.getCompletedCount());
         response.setRemainingCount(remainingCount);
         response.setOverdueCount(reviewHome.getOverdueCount());
-        response.setEstimatedMinutes(Math.toIntExact(
-                remainingCount * ReviewDefault.ESTIMATED_MINUTES_PER_QUESTION));
+        response.setEstimatedMinutes(Math.toIntExact(remainingCount * estimatedMinutesPerQuestion));
         response.setProgressRate(calculateProgressRate(reviewHome.getCompletedCount(),
                 todayTaskCount));
         response.setContinuousReviewDays(reviewHome.getContinuousReviewDays());
@@ -63,6 +81,9 @@ public class ReviewTodayServiceImpl implements ReviewTodayService {
         response.setTaskList(taskList);
         response.setSelectedSubject(reviewHome.getSelectedSubject());
         response.setSubjectSettings(reviewHome.getSubjectSettings());
+        response.setPlanExplanation(reviewPlanExplanationService.buildPlanExplanation(reviewPlan,
+                reviewHome.getSelectedSubject(), today, taskList,
+                estimatedMinutesPerQuestion));
         return response;
     }
 

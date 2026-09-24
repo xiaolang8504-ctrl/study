@@ -14,9 +14,10 @@ import java.util.Set;
 public final class QuestionCaptureFileType {
 
     public static final String PDF = "pdf";
+    public static final String DOCX = "docx";
 
     private static final Set<String> SUPPORTED_EXTENSION_SET = new HashSet<>(Arrays.asList(
-            "jpg", "jpeg", "png", PDF
+            "jpg", "jpeg", "png", PDF, DOCX
     ));
 
     private QuestionCaptureFileType() {
@@ -28,6 +29,10 @@ public final class QuestionCaptureFileType {
 
     public static boolean isPdf(String extension) {
         return PDF.equals(normalize(extension));
+    }
+
+    public static boolean isDocx(String extension) {
+        return DOCX.equals(normalize(extension));
     }
 
     private static String normalize(String extension) {

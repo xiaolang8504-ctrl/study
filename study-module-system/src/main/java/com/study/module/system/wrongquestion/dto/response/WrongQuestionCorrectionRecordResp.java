@@ -18,6 +18,15 @@ public class WrongQuestionCorrectionRecordResp {
     @ApiModelProperty("错题ID")
     private Long wrongQuestionId;
 
+    @ApiModelProperty("订正版本号")
+    private Integer revisionNo;
+
+    @ApiModelProperty("提交前独立思路")
+    private String thinking;
+
+    @ApiModelProperty("学生自述错因")
+    private String errorReason;
+
     @ApiModelProperty("订正答案")
     private String correctionAnswer;
 

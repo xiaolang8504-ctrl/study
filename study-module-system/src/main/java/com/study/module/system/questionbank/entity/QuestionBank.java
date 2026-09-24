@@ -109,6 +109,13 @@ public class QuestionBank {
      */
     private String sourceName;
 
+    /** 教材版本、章节、地区真题属性。 */
+    private String textbookVersion;
+    private String chapterName;
+    private String region;
+    private Integer examYear;
+    private String paperType;
+
     /** 内容提供方或版权方。 */
     private String provider;
 
@@ -117,6 +124,13 @@ public class QuestionBank {
 
     /** 授权说明、合同编号或适用范围。 */
     private String license;
+
+    /** 授权版本，变更授权边界时保留历史快照依据。 */
+    private String licenseVersion;
+
+    /** 参数化变式题的生成模板与记录；普通题为空。 */
+    private Long variantTemplateId;
+    private Long variantRecordId;
 
     /** 授权到期日期；为空表示未设置到期日。 */
     private java.time.LocalDate expireAt;

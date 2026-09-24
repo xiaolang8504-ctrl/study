@@ -8,6 +8,7 @@ import com.study.module.system.review.constants.ReviewInterval;
 import com.study.module.system.review.constants.ReviewItemStatus;
 import com.study.module.system.review.constants.ReviewStage;
 import com.study.module.system.review.constants.ReviewMasteryEvidencePolicy;
+import com.study.module.system.review.constants.ReviewPlanExplanationPolicy;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.study.module.system.review.dto.request.SubmitReviewFeedbackReq;
 import com.study.module.system.review.dto.response.SubmitReviewFeedbackResp;
@@ -394,6 +395,7 @@ public class ReviewFeedbackServiceImpl implements ReviewFeedbackService {
         response.setCorrectStreak(reviewItem.getCorrectStreak());
         response.setWrongStreak(reviewItem.getWrongStreak());
         response.setNextReviewTime(record.getNextReviewTime());
+        response.setNextReviewReason(ReviewPlanExplanationPolicy.nextReviewReason(record));
         response.setMastered(mastered);
         return response;
     }

@@ -2,6 +2,7 @@ package com.study.module.system.review.dto.response;
 
 import com.study.module.system.wrongquestion.dto.response.WrongQuestionErrorAnalysisStatisticsResp;
 import com.study.module.system.wrongquestion.dto.response.WrongQuestionKnowledgePointStatisticsResp;
+import com.study.module.system.wrongquestion.dto.response.WrongQuestionAbilityLevelStatisticsResp;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
 
@@ -64,6 +65,12 @@ public class ReviewLearningReportResp {
     @ApiModelProperty("错因分布")
     private List<WrongQuestionErrorAnalysisStatisticsResp> errorAnalysisList;
 
+    @ApiModelProperty("能力层级分布")
+    private List<WrongQuestionAbilityLevelStatisticsResp> abilityLevelStatisticsList;
+
     @ApiModelProperty("近30日学习快照趋势；快照从 P1 发布后的次日开始积累")
     private List<LearningMetricDailyResp> dailyMetricList;
+
+    @ApiModelProperty("当请求携带行动下钻条件时返回的题目清单")
+    private ReviewReportActionDetailResp actionDetail;
 }

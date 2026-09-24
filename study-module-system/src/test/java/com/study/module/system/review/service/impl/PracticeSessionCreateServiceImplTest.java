@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapp
 import com.study.common.core.exception.LogicException;
 import com.study.module.system.questionbank.entity.QuestionBank;
 import com.study.module.system.questionbank.service.QuestionBankService;
+import com.study.module.system.review.dto.request.PracticeQuestionSelectReq;
 import com.study.module.system.review.dto.request.PracticeSessionCreateReq;
 import com.study.module.system.review.dto.response.PracticeSessionPreviewResp;
 import com.study.module.system.review.entity.PracticeSession;
@@ -25,6 +26,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.util.Collections;
+import java.util.Arrays;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -94,6 +96,26 @@ class PracticeSessionCreateServiceImplTest {
         verify(practiceSessionService, never()).save(org.mockito.ArgumentMatchers.any(PracticeSession.class));
     }
 
+    /**
+     * 手工组卷篮必须按学生调整后的顺序返回，不能再次被智能排序覆盖。
+     */
+    @Test
+    void shouldPreserveQuestionBasketOrder() {
+        login();
+        WrongQuestion first = question(1L, "第一题");
+        WrongQuestion second = question(2L, "第二题");
+        when(wrongQuestionService.lambdaQuery()).thenReturn(wrongQuestionQuery);
+        when(wrongQuestionQuery.list()).thenReturn(Arrays.asList(first, second));
+        PracticeSessionCreateReq request = request(2);
+        request.setSelectedQuestionList(Arrays.asList(selected(2L), selected(1L)));
+
+        PracticeSessionPreviewResp response = practiceSessionCreateService.previewPracticeSession(request);
+
+        assertEquals(2L, response.getQuestionList().get(0).getQuestionId());
+        assertEquals(1L, response.getQuestionList().get(1).getQuestionId());
+        assertEquals("第二题", response.getQuestionList().get(0).getQuestionTitle());
+    }
+
     private void login() {
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(8L, null, Collections.emptyList()));
@@ -129,5 +151,22 @@ class PracticeSessionCreateServiceImplTest {
         request.setLearningPoint("一次函数");
         request.setQuestionCount(questionCount);
         return request;
+    }
+
+    private PracticeQuestionSelectReq selected(Long questionId) {
+        PracticeQuestionSelectReq selected = new PracticeQuestionSelectReq();
+        selected.setQuestionSource("WRONG_QUESTION");
+        selected.setQuestionId(questionId);
+        return selected;
+    }
+
+    private WrongQuestion question(Long id, String title) {
+        WrongQuestion question = new WrongQuestion();
+        question.setId(id);
+        question.setQuestionTitle(title);
+        question.setQuestionContent(title + "内容");
+        question.setStatus(1);
+        question.setLevel(3);
+        return question;
     }
 }

@@ -23,6 +23,15 @@ public class WrongQuestionCorrectionRecord {
      */
     private Long wrongQuestionId;
 
+    /** 订正版本号。 */
+    private Integer revisionNo;
+
+    /** 提交前独立思路。 */
+    private String thinking;
+
+    /** 学生自述错因。 */
+    private String errorReason;
+
     /**
      * 订正答案
      */

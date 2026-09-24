@@ -26,4 +26,7 @@ public interface GuardianBindingService extends IService<StudentGuardianRel> {
 
     /** 判断当前用户是否仍拥有某学生的数据查看权。 */
     boolean canCurrentGuardianAccessStudent(Long studentUserId);
+
+    /** 校验指定家长与学生当前仍有有效绑定，供学生确认历史代上传时使用。 */
+    boolean hasActiveBinding(Long studentUserId, Long guardianUserId);
 }

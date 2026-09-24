@@ -4,6 +4,7 @@ import com.study.module.system.review.constants.ReviewDefault;
 import com.study.module.system.review.constants.ReviewItemStatus;
 import com.study.module.system.review.constants.ReviewPlanStatus;
 import com.study.module.system.review.constants.ReviewStage;
+import com.study.module.system.review.constants.ReviewTodayActionPackagePolicy;
 import com.study.module.system.review.dto.response.ReviewHomeResp;
 import com.study.module.system.review.dto.response.ReviewLearningPointResp;
 import com.study.module.system.review.dto.response.ReviewScheduleResp;
@@ -17,6 +18,7 @@ import com.study.module.system.review.mapper.ReviewPlanMapper;
 import com.study.module.system.review.service.ReviewHomeService;
 import com.study.module.system.review.service.ReviewItemService;
 import com.study.module.system.review.service.ReviewPlanService;
+import com.study.module.system.review.service.ReviewPlanExplanationService;
 import com.study.module.system.review.service.ReviewRecordService;
 import com.study.module.system.review.service.ReviewSubjectSettingService;
 import com.study.module.system.wrongquestion.entity.WrongQuestion;
@@ -78,6 +80,9 @@ public class ReviewHomeServiceImpl implements ReviewHomeService {
 
     @Autowired
     ReviewSubjectSettingService reviewSubjectSettingService;
+
+    @Autowired
+    ReviewPlanExplanationService reviewPlanExplanationService;
 
     /**
      * 初始化复习首页
@@ -258,6 +263,15 @@ public class ReviewHomeServiceImpl implements ReviewHomeService {
                         selectedSubject)
                 .eq(WrongQuestion::getStatus, 2)
                 .count();
+        long pendingCorrectionCount = wrongQuestionService.lambdaQuery()
+                .eq(WrongQuestion::getCreateId, userId)
+                .eq(StringUtils.hasText(selectedSubject), WrongQuestion::getSubject,
+                        selectedSubject)
+                .eq(WrongQuestion::getStatus, 0)
+                .count();
+        List<ReviewLearningPointResp> learningPointList = buildLearningPointList(activeItems);
+        int estimatedMinutesPerQuestion = reviewPlanExplanationService
+                .estimatedMinutesPerQuestion(userId, selectedSubject);
 
         // 最后统一组装首页，确保统计、排期、知识点和科目设置使用同一筛选条件。
         ReviewHomeResp response = new ReviewHomeResp();
@@ -278,9 +292,12 @@ public class ReviewHomeServiceImpl implements ReviewHomeService {
         response.setMasteryRate(calculateRate(masteredCount, reviewQuestionCount));
         response.setAverageMasteryScore(calculateAverageMasteryScore(activeItems));
         response.setScheduleList(buildScheduleList(today, activeItems, recentRecords));
-        response.setLearningPointList(buildLearningPointList(activeItems));
+        response.setLearningPointList(learningPointList);
         response.setSelectedSubject(selectedSubject);
         response.setSubjectSettings(buildSubjectSettingResponses(plan));
+        response.setTodayActionPackageList(ReviewTodayActionPackagePolicy.build(
+                estimatedMinutesPerQuestion, remainingCount, overdueCount, pendingCorrectionCount,
+                weakestLearningPoint(learningPointList), selectedSubject));
         return response;
     }
 
@@ -530,10 +547,26 @@ public class ReviewHomeServiceImpl implements ReviewHomeService {
             result.add(response);
         });
         return result.stream()
-                .sorted(Comparator.comparing(ReviewLearningPointResp::getQuestionCount).reversed()
+                .sorted(Comparator.comparing(this::averageMasteryScore)
+                        .thenComparing(ReviewLearningPointResp::getQuestionCount,
+                                Comparator.nullsLast(Comparator.reverseOrder()))
                         .thenComparing(ReviewLearningPointResp::getLearningPoint))
                 .limit(5)
                 .collect(Collectors.toList());
+    }
+
+    private ReviewLearningPointResp weakestLearningPoint(List<ReviewLearningPointResp> learningPointList) {
+        return learningPointList.stream()
+                .filter(item -> StringUtils.hasText(item.getLearningPoint())
+                        && !"未分类".equals(item.getLearningPoint()))
+                .min(Comparator.comparing(this::averageMasteryScore)
+                        .thenComparing(ReviewLearningPointResp::getQuestionCount,
+                                Comparator.nullsLast(Comparator.reverseOrder())))
+                .orElse(null);
+    }
+
+    private BigDecimal averageMasteryScore(ReviewLearningPointResp item) {
+        return item.getAverageMasteryScore() == null ? BigDecimal.ZERO : item.getAverageMasteryScore();
     }
 
     /**

@@ -15,6 +15,8 @@ import com.study.module.system.wrongquestion.mapper.WrongQuestionCorrectionRecor
 import com.study.module.system.wrongquestion.service.WrongQuestionCorrectionRecordService;
 import com.study.module.system.wrongquestion.service.WrongQuestionService;
 import com.study.module.system.wrongquestion.service.WrongQuestionTimelineService;
+import com.study.module.system.wrongquestion.service.WrongQuestionCorrectionDraftService;
+import com.yunshang.budget.common.security.utils.AccountUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -43,6 +45,9 @@ public class WrongQuestionCorrectionRecordServiceImpl
     @Autowired
     WrongQuestionTimelineService wrongQuestionTimelineService;
 
+    @Autowired
+    WrongQuestionCorrectionDraftService wrongQuestionCorrectionDraftService;
+
     /**
      * 提交错题订正记录
      */
@@ -57,6 +62,9 @@ public class WrongQuestionCorrectionRecordServiceImpl
         LocalDateTime now = LocalDateTime.now();
         WrongQuestionCorrectionRecord record = new WrongQuestionCorrectionRecord();
         record.setWrongQuestionId(request.getWrongQuestionId());
+        record.setRevisionNo(nextRevisionNo(request.getWrongQuestionId()));
+        record.setThinking(request.getThinking());
+        record.setErrorReason(request.getErrorReason());
         record.setCorrectionAnswer(request.getCorrectionAnswer());
         record.setCorrectionAnalysis(request.getCorrectionAnalysis());
         record.setCorrectionImageUrl(request.getCorrectionImageUrl());
@@ -82,6 +90,7 @@ public class WrongQuestionCorrectionRecordServiceImpl
         wrongQuestionTimelineService.record(wrongQuestion.getId(), "CORRECTION_SUBMITTED", "STUDENT",
                 "已提交订正，状态变更为已订正并加入复习计划", record.getCreateId());
         reviewEnrollmentService.syncWrongQuestionReview(wrongQuestion);
+        wrongQuestionCorrectionDraftService.deleteCorrectionDraft(wrongQuestion.getId(), AccountUtils.getUserId());
     }
 
     /**
@@ -117,5 +126,13 @@ public class WrongQuestionCorrectionRecordServiceImpl
      */
     private WrongQuestionCorrectionRecordResp toResponse(WrongQuestionCorrectionRecord record) {
         return WrongQuestionConvert.INSTANCE.toWrongQuestionCorrectionRecordResp(record);
+    }
+
+    private int nextRevisionNo(Long wrongQuestionId) {
+        WrongQuestionCorrectionRecord latest = lambdaQuery()
+                .eq(WrongQuestionCorrectionRecord::getWrongQuestionId, wrongQuestionId)
+                .orderByDesc(WrongQuestionCorrectionRecord::getRevisionNo,
+                        WrongQuestionCorrectionRecord::getId).last("LIMIT 1").one();
+        return latest == null || latest.getRevisionNo() == null ? 1 : latest.getRevisionNo() + 1;
     }
 }

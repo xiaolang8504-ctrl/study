@@ -11,6 +11,12 @@ import java.util.List;
  */
 @Data
 public class QuestionBankDetailResp {
+    private String textbookVersion;
+    private String chapterName;
+    private String region;
+    private Integer examYear;
+    private String paperType;
+    private String licenseVersion;
 
     @ApiModelProperty("题库题目ID")
     private Long id;

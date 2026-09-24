@@ -41,6 +41,27 @@ public class PracticeSession {
     private String generationReason;
 
     /**
+     * 每题作答留白行数
+     */
+    private Integer blankLineCount;
+
+    /**
+     * 答案位置：AFTER_EACH逐题显示，END卷末集中显示
+     */
+    private String answerPosition;
+
+    /**
+     * 题面图片：ORIGINAL原图，GRAYSCALE灰度预览，TEXT_ONLY仅文字。
+     */
+    private String imageMode;
+
+    /** 练习卷版本。 */
+    private Integer paperVersion;
+
+    /** 排版栏数：1或2。 */
+    private Integer columnCount;
+
+    /**
      * 科目字典键值
      */
     private String subject;

@@ -96,6 +96,26 @@
           <p>备份仅包含当前登录账号的数据，不包含其他用户和系统管理数据。请在安全的位置保存。</p>
           <el-button icon="el-icon-download" :loading="backupLoading" @click="downloadBackup">下载数据备份</el-button>
         </el-card>
+
+        <el-card shadow="never" class="setting-card sprint-card">
+          <div slot="header" class="card-header"><div><strong>考前冲刺</strong><span>从未订正和掌握不稳的个人错题中生成每日短练，不替代正常到期复习。</span></div></div>
+          <el-form :model="sprintForm" label-position="top" class="sprint-form">
+            <el-row :gutter="14">
+              <el-col :xs="24" :sm="8"><el-form-item label="考试科目"><el-select v-model="sprintForm.subject" placeholder="选择科目"><el-option v-for="item in profileSubjectOptions" :key="item.key" :label="item.value" :value="item.key" /></el-select></el-form-item></el-col>
+              <el-col :xs="24" :sm="8"><el-form-item label="考试日期"><el-date-picker v-model="sprintForm.examDate" type="date" value-format="yyyy-MM-dd" :picker-options="sprintDateOptions" placeholder="选择日期" /></el-form-item></el-col>
+              <el-col :xs="12" :sm="4"><el-form-item label="每日分钟"><el-input-number v-model="sprintForm.dailyMinutes" :min="5" :max="240" /></el-form-item></el-col>
+              <el-col :xs="12" :sm="4"><el-form-item label="每日题数"><el-input-number v-model="sprintForm.targetQuestionCount" :min="1" :max="30" /></el-form-item></el-col>
+            </el-row>
+            <el-form-item label="考试范围"><el-input v-model.trim="sprintForm.scopeText" maxlength="500" show-word-limit placeholder="例如：二次函数、几何证明" /></el-form-item>
+            <el-button type="primary" :loading="sprintSaving" @click="saveSprint">生成冲刺短练</el-button>
+          </el-form>
+          <div v-if="sprint" class="sprint-result">
+            <p><strong>{{ sprint.subject }} · 距考试 {{ sprint.daysRemaining }} 天</strong>，今天建议 {{ sprint.candidates.length }} 题，约 {{ sprint.estimatedMinutes }} 分钟。</p>
+            <p class="form-tip">{{ sprint.coordinationNote }}</p>
+            <el-tag v-for="item in sprint.candidates" :key="item.wrongQuestionId" class="sprint-question" type="warning">{{ item.questionTitle || ('错题 #' + item.wrongQuestionId) }} · {{ item.priorityReason }}</el-tag>
+            <el-button v-if="sprint.candidates.length" size="small" type="success" @click="startSprintPractice">开始这组短练</el-button>
+          </div>
+        </el-card>
       </el-col>
 
       <el-col :xs="24" :lg="8">
@@ -119,7 +139,7 @@
 </template>
 
 <script>
-import { learningDataBackup, learningProfile, reviewPlanSetting, updateLearningProfile, updateReviewPlanSetting } from '@/api/system/review'
+import { createPracticeSession, learningDataBackup, learningProfile, reviewExamSprint, reviewPlanSetting, saveReviewExamSprint, updateLearningProfile, updateReviewPlanSetting } from '@/api/system/review'
 import { bookPageList } from '@/api/system/book'
 import { dictDataOptions } from '@/api/system/dict'
 
@@ -145,6 +165,10 @@ export default {
       gradeOptions: [],
       profileSubjectOptions: [],
       bookOptions: [],
+      sprintSaving: false,
+      sprint: null,
+      sprintForm: { subject: '', examDate: '', scopeText: '', dailyMinutes: 30, targetQuestionCount: 5 },
+      sprintDateOptions: { disabledDate: date => date.getTime() < new Date().setHours(0, 0, 0, 0) },
       weekOptions: [
         { value: 1, label: '周一' }, { value: 2, label: '周二' },
         { value: 3, label: '周三' }, { value: 4, label: '周四' },
@@ -176,6 +200,7 @@ export default {
     this.loadSetting()
     this.loadLearningProfile()
     this.loadProfileOptions()
+    this.loadSprint()
   },
   methods: {
     // 读取当前登录学生的唯一复习计划设置。
@@ -242,6 +267,7 @@ export default {
       const profile = await learningProfile().catch(() => ({}))
       this.learningProfile = Object.assign({ grade: '', subject: '', bookId: null }, profile || {})
       await this.loadBookOptions()
+      if (!this.sprintForm.subject && this.learningProfile.subject) this.sprintForm.subject = this.learningProfile.subject
     },
     async profileScopeChanged() {
       this.learningProfile.bookId = null
@@ -269,6 +295,23 @@ export default {
       } finally {
         this.profileSaving = false
       }
+    },
+    async loadSprint() {
+      this.sprint = await reviewExamSprint().catch(() => null)
+      if (this.sprint) this.sprintForm = Object.assign({}, this.sprintForm, this.sprint)
+    },
+    async saveSprint() {
+      if (!this.sprintForm.subject || !this.sprintForm.examDate) return this.$message.warning('请选择冲刺科目和考试日期')
+      this.sprintSaving = true
+      try {
+        this.sprint = await saveReviewExamSprint(this.sprintForm)
+        this.$message.success('冲刺短练已生成；常规到期复习不会被改写')
+      } finally { this.sprintSaving = false }
+    },
+    async startSprintPractice() {
+      const selectedQuestionList = this.sprint.candidates.map(item => ({ questionSource: 'WRONG_QUESTION', questionId: item.wrongQuestionId }))
+      const session = await createPracticeSession({ title: `${this.sprint.subject}考前冲刺`, practiceType: 'EXAM_SPRINT', questionSource: 'WRONG_QUESTION', subject: this.sprint.subject, questionCount: selectedQuestionList.length, selectedQuestionList })
+      this.$router.push({ path: '/system/review/practice', query: { sessionId: session.id } })
     },
     async downloadBackup() {
       this.backupLoading = true

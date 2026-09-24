@@ -3,6 +3,8 @@ package com.study.module.system.review.controller;
 import com.study.module.system.review.dto.request.PracticeAnswerSubmitReq;
 import com.study.module.system.review.dto.request.PracticeAnswerBatchSubmitReq;
 import com.study.module.system.review.dto.request.PracticeAnswerDraftSaveReq;
+import com.study.module.system.review.dto.request.PracticePaperAnswerFillReq;
+import com.study.module.system.review.dto.request.PracticePaperFillDetailReq;
 import com.study.module.system.review.dto.request.PracticeSessionCreateReq;
 import com.study.module.system.review.dto.request.PracticeSessionIdReq;
 import com.study.module.system.review.dto.request.PracticeSessionQuestionIdReq;
@@ -18,8 +20,10 @@ import com.study.module.system.review.dto.request.ReviewLearningReportReq;
 import com.study.module.system.review.dto.request.SubmitReviewFeedbackReq;
 import com.study.module.system.review.dto.request.UpdateReviewPlanSettingReq;
 import com.study.module.system.review.dto.request.UpdateLearningProfileReq;
+import com.study.module.system.review.dto.request.ReviewExamSprintSaveReq;
 import com.study.module.system.review.dto.response.PracticeAnswerSubmitResp;
 import com.study.module.system.review.dto.response.PracticeQuestionAnswerResp;
+import com.study.module.system.review.dto.response.PracticePaperFillDetailResp;
 import com.study.module.system.review.dto.response.PracticeSessionDetailResp;
 import com.study.module.system.review.dto.response.PracticeSessionPreviewResp;
 import com.study.module.system.review.dto.response.PracticeSessionPageListResp;
@@ -37,8 +41,11 @@ import com.study.module.system.review.dto.response.ReviewAdaptiveContentResp;
 import com.study.module.system.review.dto.response.ReviewLearningReportResp;
 import com.study.module.system.review.dto.response.LearningDataBackupResp;
 import com.study.module.system.review.dto.response.LearningProfileResp;
+import com.study.module.system.review.dto.response.ReviewExamSprintResp;
+import com.study.module.system.review.dto.response.LearningPathResp;
 import com.study.module.system.review.service.PracticeAnswerSubmitService;
 import com.study.module.system.review.service.PracticeAnswerRevealService;
+import com.study.module.system.review.service.PracticePaperFillService;
 import com.study.module.system.review.service.PracticeSessionCreateService;
 import com.study.module.system.review.service.PracticeSessionDetailService;
 import com.study.module.system.review.service.PracticeSessionFinishService;
@@ -59,6 +66,8 @@ import com.study.module.system.review.service.ReviewLearningReportService;
 import com.study.module.system.review.service.LearningDataBackupService;
 import com.study.module.system.review.service.LearningProfileService;
 import com.study.module.system.review.service.PracticePaperExportTaskService;
+import com.study.module.system.review.service.ReviewExamSprintPlanService;
+import com.study.module.system.review.service.LearningPathService;
 import com.study.module.system.review.dto.request.PracticePaperExportCreateReq;
 import com.study.module.system.review.dto.response.PracticePaperExportTaskResp;
 import com.study.common.core.domain.Result;
@@ -152,6 +161,15 @@ public class ReviewController {
     @Autowired
     PracticePaperExportTaskService practicePaperExportTaskService;
 
+    @Autowired
+    LearningPathService learningPathService;
+
+    @Autowired
+    PracticePaperFillService practicePaperFillService;
+
+    @Autowired
+    ReviewExamSprintPlanService reviewExamSprintPlanService;
+
     /**
      * 初始化智能复习首页
      */
@@ -170,8 +188,9 @@ public class ReviewController {
     @PreAuthorize("hasAuthority('system:review:todayReviewHome')")
     @GetMapping("/todayReviewHome")
     public Result<ReviewTodayHomeResp> todayReviewHome(
-            @RequestParam(required = false) String subject) {
-        return ResultUtils.success(reviewTodayService.todayReviewHome(subject));
+            @RequestParam(required = false) String subject,
+            @RequestParam(required = false) Integer taskLimit) {
+        return ResultUtils.success(reviewTodayService.todayReviewHome(subject, taskLimit));
     }
 
     /**
@@ -308,6 +327,28 @@ public class ReviewController {
     }
 
     /**
+     * 通过纸面短码查询练习卷及其逐题回填记录。
+     */
+    @ApiOperation("纸面练习卷逐题回填详情")
+    @PreAuthorize("hasAuthority('system:review:practiceSessionDetail')")
+    @GetMapping("/practicePaperFillDetail")
+    public Result<PracticePaperFillDetailResp> practicePaperFillDetail(
+            @Validated PracticePaperFillDetailReq request) {
+        return ResultUtils.success(practicePaperFillService.practicePaperFillDetail(request.getPaperCode()));
+    }
+
+    /**
+     * 保存纸面练习卷逐题作答结果。
+     */
+    @ApiOperation("提交纸面练习卷逐题回填")
+    @PreAuthorize("hasAuthority('system:review:submitPracticeAnswer')")
+    @PostMapping("/submitPracticePaperAnswerFill")
+    public Result<PracticePaperFillDetailResp> submitPracticePaperAnswerFill(
+            @RequestBody @Validated PracticePaperAnswerFillReq request) {
+        return ResultUtils.success(practicePaperFillService.submitPracticePaperAnswerFill(request));
+    }
+
+    /**
      * 提交专项练习作答
      */
     @ApiOperation("提交专项练习作答")
@@ -409,6 +450,24 @@ public class ReviewController {
     }
 
     /**
+     * 考前冲刺读取复用计划设置的已授权入口；只返回额外短练建议。
+     */
+    @ApiOperation("考前冲刺建议")
+    @PreAuthorize("hasAuthority('system:review:reviewPlanSetting')")
+    @GetMapping("/reviewExamSprint")
+    public Result<ReviewExamSprintResp> reviewExamSprint(@RequestParam(required = false) String subject) {
+        return ResultUtils.success(reviewExamSprintPlanService.reviewExamSprint(subject));
+    }
+
+    @ApiOperation("保存考前冲刺设置")
+    @PreAuthorize("hasAuthority('system:review:updateReviewPlanSetting')")
+    @PostMapping("/saveReviewExamSprint")
+    public Result<ReviewExamSprintResp> saveReviewExamSprint(
+            @RequestBody @Validated ReviewExamSprintSaveReq request) {
+        return ResultUtils.success(reviewExamSprintPlanService.saveReviewExamSprint(request));
+    }
+
+    /**
      * 查询当前学生的教材等学习偏好。
      */
     @ApiOperation("查询学习偏好")
@@ -416,6 +475,13 @@ public class ReviewController {
     @GetMapping("/learningProfile")
     public Result<LearningProfileResp> learningProfile() {
         return ResultUtils.success(learningProfileService.learningProfile());
+    }
+
+    @ApiOperation("个人知识学习路径")
+    @PreAuthorize("hasAuthority('system:review:learningPath')")
+    @GetMapping("/learningPath")
+    public Result<LearningPathResp> learningPath(@RequestParam(required = false) String subject) {
+        return ResultUtils.success(learningPathService.learningPath(subject));
     }
 
     /**

@@ -51,6 +51,27 @@ public interface QuestionBankMapper extends BaseMapper<QuestionBank> {
                                                  @Param("limit") Integer limit);
 
     /**
+     * 同知识点、跨题型优先的应用候选题。仍只返回审核通过、启用且授权有效的题目。
+     */
+    @Select("<script>SELECT q.* FROM sys_question_bank q "
+            + "JOIN sys_question_knowledge_point qkp ON qkp.question_id=q.id "
+            + "WHERE q.review_status=1 AND q.enable=1 AND (q.expire_at IS NULL OR q.expire_at &gt;= CURDATE()) "
+            + "AND q.grade=#{grade} AND q.subject=#{subject} "
+            + "AND qkp.knowledge_point_id IN "
+            + "<foreach collection='pointIds' item='id' open='(' separator=',' close=')'>#{id}</foreach> "
+            + "AND NOT EXISTS (SELECT 1 FROM sys_question_recommendation_log rl WHERE rl.user_id=#{userId} "
+            + "AND rl.bank_question_id=q.id AND rl.exposure_time &gt; DATE_SUB(NOW(), INTERVAL 30 DAY)) "
+            + "GROUP BY q.id ORDER BY CASE WHEN q.question_type=#{sourceQuestionType} THEN 1 ELSE 0 END ASC, "
+            + "COUNT(DISTINCT qkp.knowledge_point_id) DESC, ABS(q.difficulty-#{difficulty}) ASC, q.id DESC LIMIT #{limit}</script>")
+    List<QuestionBank> selectKnowledgeContextCandidates(@Param("userId") Long userId,
+                                                        @Param("grade") String grade,
+                                                        @Param("subject") String subject,
+                                                        @Param("sourceQuestionType") String sourceQuestionType,
+                                                        @Param("difficulty") Integer difficulty,
+                                                        @Param("pointIds") List<Long> pointIds,
+                                                        @Param("limit") Integer limit);
+
+    /**
      * 候选不足时按结构化条件降级；excludeRecent控制是否排除近30天曝光。
      */
     @Select("<script>SELECT q.* FROM sys_question_bank q WHERE q.review_status=1 AND q.enable=1 AND (q.expire_at IS NULL OR q.expire_at &gt;= CURDATE()) "

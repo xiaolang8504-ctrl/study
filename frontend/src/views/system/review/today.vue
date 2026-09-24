@@ -29,6 +29,28 @@
       <small v-if="currentSubjectSetting">今日上限 {{ currentSubjectSetting.dailyLimit }} 道</small>
     </div>
 
+    <el-alert v-if="isPackageMode" class="package-mode-alert" type="success" :closable="false" :title="`当前正在完成 ${packageTaskLimit} 题的时间任务包，还剩 ${packageRemainingCount} 题。完成后将提示下一项建议。`" />
+
+    <el-card v-if="home.planExplanation" shadow="never" class="plan-explanation-card">
+      <div slot="header" class="plan-explanation-header">
+        <div><strong>为什么这样安排</strong><span>排期会随真实作答和反馈自动更新</span></div>
+        <el-radio-group v-model="loadRange" size="mini">
+          <el-radio-button :label="7">未来 7 天</el-radio-button>
+          <el-radio-button :label="30">未来 30 天</el-radio-button>
+        </el-radio-group>
+      </div>
+      <p class="plan-reason">{{ home.planExplanation.todayReason }}</p>
+      <p class="plan-estimate"><i class="el-icon-alarm-clock" /> {{ home.planExplanation.timeEstimateReason }}</p>
+      <div class="future-load-list">
+        <div v-for="item in currentLoadList" :key="item.reviewDate" :class="['future-load-item', { today: item.reviewDate === home.reviewDate }]">
+          <span>{{ loadDateLabel(item.reviewDate) }}</span>
+          <b>{{ item.dueCount }} 道</b>
+          <small>{{ item.estimatedMinutes }} 分钟</small>
+        </div>
+      </div>
+      <p class="plan-notice">{{ home.planExplanation.loadNotice }}</p>
+    </el-card>
+
     <el-row :gutter="16" class="summary-row">
       <el-col v-for="item in summaryList" :key="item.label" :xs="12" :sm="6">
         <el-card shadow="never" class="summary-card">
@@ -49,6 +71,7 @@
         </div>
         <div>
           <el-button icon="el-icon-refresh" @click="loadHome">刷新</el-button>
+          <el-button icon="el-icon-guide" @click="openLearningPath">学习路径</el-button>
           <el-button type="primary" :disabled="!home.taskList.length" @click="startReview">
             开始复习
           </el-button>
@@ -68,6 +91,7 @@
             </div>
             <h3>{{ task.questionTitle || '未命名错题' }}</h3>
             <p>{{ task.learningPoint || '未设置知识点' }}</p>
+            <p class="task-reason"><i class="el-icon-info" /> {{ task.dueReason || '按当前复习计划安排' }} · 约 {{ task.estimatedMinutes || 2 }} 分钟</p>
             <div class="task-meta">
               <span><i class="el-icon-time" /> 到期：{{ task.nextReviewTime }}</span>
               <span><i class="el-icon-refresh-left" /> 已复习 {{ task.reviewCount }} 次</span>
@@ -81,6 +105,17 @@
       </div>
       <el-empty v-else description="今天没有待复习题目，去订正新的错题吧" />
     </el-card>
+
+    <el-dialog title="我的知识学习路径" :visible.sync="learningPathVisible" width="620px" append-to-body>
+      <el-alert type="info" :closable="false" title="路径基于未掌握错题、知识前置关系和到期间隔复习生成；每项均展示证据强度。" />
+      <el-timeline class="learning-path-list">
+        <el-timeline-item v-for="item in learningPath.taskList" :key="`${item.stage}-${item.knowledgePointId}`" :type="item.stage === 'PREREQUISITE' ? 'warning' : item.stage === 'CURRENT_WEAKNESS' ? 'danger' : 'success'">
+          <strong>{{ learningPathStageText(item.stage) }} · {{ item.knowledgePointName }}</strong>
+          <p>{{ item.reason }}</p><small>证据 {{ item.evidenceSampleCount }} 条 · 可信度 {{ item.confidence }}%</small>
+        </el-timeline-item>
+      </el-timeline>
+      <el-empty v-if="!learningPath.taskList.length" description="当前没有足够的结构化知识点证据" :image-size="60" />
+    </el-dialog>
 
     <el-dialog
       title="主动回忆"
@@ -132,6 +167,15 @@
             <span>题目解析</span>
             <p>{{ answer.analysis || '暂无题目解析' }}</p>
           </div>
+          <div v-if="currentTask.feedbackProjectionList && currentTask.feedbackProjectionList.length" class="feedback-projection">
+            <strong>不同反馈会怎样安排下次复习？</strong>
+            <p>以下是以当前时间提交反馈的预估；最终结果会根据本次是否独立作答和判题结果确定。</p>
+            <div class="projection-list">
+              <div v-for="item in currentTask.feedbackProjectionList" :key="item.feedback" class="projection-item">
+                <b>{{ item.feedbackName }}</b><span>{{ item.nextReviewTime }}</span><small>{{ item.explanation }}</small>
+              </div>
+            </div>
+          </div>
           <div class="self-judge">
             <strong>对照答案后，本次作答是否正确？</strong>
             <span>客观题最终以系统自动判定为准</span>
@@ -165,11 +209,16 @@
         </el-button>
       </div>
     </el-dialog>
+
+    <el-dialog title="这一段复习已完成" :visible.sync="packageCompleteVisible" width="480px" append-to-body>
+      <div class="package-complete-content"><i class="el-icon-circle-check" /><h3>已完成本次任务包中的到期复习</h3><p>{{ packageNextActionText }}</p></div>
+      <div slot="footer"><el-button @click="goPackageHome">返回今日首页</el-button><el-button v-if="packageNextActionType" type="primary" @click="goPackageNextAction">继续下一项</el-button></div>
+    </el-dialog>
   </div>
 </template>
 
 <script>
-import { reviewAnswer, saveReviewAnswerDraft, submitReviewFeedback, todayReviewHome } from '@/api/system/review'
+import { learningPath, reviewAnswer, saveReviewAnswerDraft, submitReviewFeedback, todayReviewHome } from '@/api/system/review'
 import { downloadUrl } from '@/api/system/file'
 
 const WRONG_QUESTION_UPLOAD_TYPE = 'wrongQuestion'
@@ -187,6 +236,7 @@ const emptyHome = () => ({
   dailyLimit: 20,
   selectedSubject: '',
   subjectSettings: [],
+  planExplanation: null,
   taskList: []
 })
 
@@ -204,6 +254,12 @@ export default {
       answer: null,
       studentAnswer: '',
       selfCorrect: null,
+      loadRange: 7,
+      packageTaskLimit: Math.max(0, Number(this.$route.query.taskLimit) || 0),
+      packageCompletedCount: 0,
+      packageCompleteVisible: false,
+      learningPathVisible: false,
+      learningPath: { taskList: [] },
       selectedSubject: this.$route.query.subject || '',
       home: emptyHome()
     }
@@ -237,6 +293,27 @@ export default {
       return [this.currentTask.imageUrl, this.currentTask.imageUrl2,
         this.currentTask.imageUrl3, this.currentTask.imageUrl4].filter(Boolean)
     },
+    currentLoadList() {
+      if (!this.home.planExplanation) return []
+      return this.loadRange === 30
+        ? (this.home.planExplanation.thirtyDayLoadList || [])
+        : (this.home.planExplanation.sevenDayLoadList || [])
+    },
+    isPackageMode() {
+      return this.packageTaskLimit > 0
+    },
+    packageRemainingCount() {
+      return Math.max(0, this.packageTaskLimit - this.packageCompletedCount)
+    },
+    packageNextActionType() {
+      return this.$route.query.nextActionType || ''
+    },
+    packageNextActionText() {
+      const type = this.packageNextActionType
+      if (type === 'CORRECTION') return `接下来建议订正 ${this.$route.query.nextActionCount || 1} 道新错题，让它们进入后续复习计划。`
+      if (type === 'WEAK_POINT_PRACTICE') return `接下来建议练习「${this.$route.query.nextActionLearningPoint || '当前薄弱知识点'}」，巩固本次复习暴露的薄弱环节。`
+      return '刷新今日首页后，系统会根据本次作答与最新到期时间推荐下一步。'
+    },
     feedbackOptions() {
       return [
         { value: 0, label: '忘记', description: '掌握度-20', icon: 'el-icon-close', type: 'forgot' },
@@ -258,14 +335,25 @@ export default {
         this.answer = null
         this.loadHome()
       }
+    },
+    '$route.query.taskLimit'(taskLimit) {
+      this.packageTaskLimit = Math.max(0, Number(taskLimit) || 0)
+      this.packageCompletedCount = 0
+      this.packageCompleteVisible = false
+      this.loadHome()
     }
   },
   methods: {
+    openLearningPath() { learningPath({ subject: this.selectedSubject || undefined }).then(data => { this.learningPath = data || { taskList: [] }; this.learningPathVisible = true }) },
+    learningPathStageText(stage) { return { PREREQUISITE: '前置补缺', CURRENT_WEAKNESS: '当前薄弱', SPACED_REINFORCEMENT: '间隔巩固' }[stage] || stage },
     // 刷新今日统计和待复习任务，并将图片文件 ID 转换为可访问地址。
     async loadHome() {
       this.loading = true
       try {
-        const data = await todayReviewHome({ subject: this.selectedSubject || undefined })
+        const data = await todayReviewHome({
+          subject: this.selectedSubject || undefined,
+          taskLimit: this.isPackageMode ? this.packageRemainingCount : undefined
+        })
         this.home = Object.assign(emptyHome(), data || {})
         this.selectedSubject = this.home.selectedSubject || ''
         await this.fillTaskImageUrls()
@@ -329,12 +417,16 @@ export default {
         })
         const masteredText = result.mastered ? '，该错题已标记为掌握' : ''
         const deltaText = result.masteryScoreDelta > 0 ? `+${result.masteryScoreDelta}` : result.masteryScoreDelta
-        this.$message.success(`掌握度 ${result.masteryScoreAfter}分（${deltaText}），下次复习：${result.nextReviewTime}${masteredText}`)
+        this.$message.success(result.nextReviewReason || `掌握度 ${result.masteryScoreAfter}分（${deltaText}），下次复习：${result.nextReviewTime}${masteredText}`)
         this.answer = null
         this.studentAnswer = ''
         this.selfCorrect = null
+        if (this.isPackageMode) this.packageCompletedCount += 1
         await this.loadHome()
-        if (this.home.taskList.length) {
+        if (this.isPackageMode && (this.packageRemainingCount === 0 || !this.home.taskList.length)) {
+          this.previewVisible = false
+          this.packageCompleteVisible = true
+        } else if (this.home.taskList.length) {
           this.previewTask(0)
         } else {
           this.previewVisible = false
@@ -377,6 +469,38 @@ export default {
       if (value < 70) return 'warning'
       if (value < 90) return 'success'
       return ''
+    },
+    loadDateLabel(date) {
+      if (!date) return '--'
+      if (date === this.home.reviewDate) return '今天'
+      const tomorrow = new Date(`${this.home.reviewDate}T00:00:00`)
+      tomorrow.setDate(tomorrow.getDate() + 1)
+      if (date === this.formatDateOnly(tomorrow)) return '明天'
+      return date.slice(5).replace('-', '/')
+    },
+    formatDateOnly(date) {
+      const pad = value => String(value).padStart(2, '0')
+      return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+    },
+    goPackageHome() {
+      this.packageCompleteVisible = false
+      this.$router.push({ path: '/system/review', query: this.selectedSubject ? { subject: this.selectedSubject } : {} })
+    },
+    goPackageNextAction() {
+      const subject = this.$route.query.nextActionSubject || this.selectedSubject || ''
+      if (this.packageNextActionType === 'CORRECTION') {
+        const query = { status: 0 }
+        if (subject) query.subject = subject
+        this.$router.push({ path: '/system/wrongquestion', query })
+        return
+      }
+      if (this.packageNextActionType === 'WEAK_POINT_PRACTICE') {
+        const query = { learningPoint: this.$route.query.nextActionLearningPoint || '' }
+        if (subject) query.subject = subject
+        this.$router.push({ path: '/system/review/practice', query })
+        return
+      }
+      this.goPackageHome()
     }
   }
 }
@@ -385,8 +509,10 @@ export default {
 <style lang="scss" scoped>
 .today-review { padding: 4px; color: #27314a; }
 .subject-filter { display: flex; align-items: center; gap: 14px; padding: 12px 16px; margin-bottom: 16px; border-radius: 10px; background: #fff; }
+.package-mode-alert { margin: -4px 0 16px; }.package-complete-content { text-align:center; }.package-complete-content > i { color:#35a57d; font-size:48px; }.package-complete-content h3 { margin:12px 0 8px; color:#354058; }.package-complete-content p { margin:0; color:#7d879a; line-height:1.7; }
 .subject-filter > span { color: #8b94a8; font-size: 13px; }
 .subject-filter > small { margin-left: auto; color: #7d879c; }
+.plan-explanation-card { margin-bottom: 16px; border: 0; border-radius: 12px; }.plan-explanation-card ::v-deep .el-card__header { padding: 14px 20px; }.plan-explanation-header { display:flex; align-items:center; justify-content:space-between; gap:12px; }.plan-explanation-header span { margin-left:9px; color:#99a2b3; font-size:12px; }.plan-reason { margin:0 0 7px; color:#3d4860; line-height:1.7; }.plan-estimate { margin:0; color:#65719a; font-size:13px; }.future-load-list { display:flex; gap:8px; overflow-x:auto; padding:14px 0 8px; }.future-load-item { display:flex; min-width:66px; align-items:center; flex-direction:column; gap:4px; padding:8px; border-radius:7px; background:#f7f8fb; color:#68738b; font-size:11px; }.future-load-item.today { color:#fff; background:#6374e9; }.future-load-item b { font-size:14px; }.future-load-item small { font-size:10px; white-space:nowrap; }.plan-notice { margin:4px 0 0; color:#a0a8b8; font-size:11px; line-height:1.6; }
 .today-hero { display: flex; align-items: center; justify-content: space-between; min-height: 164px; padding: 28px 42px; margin-bottom: 18px; color: #fff; border-radius: 14px; background: linear-gradient(125deg, #4357dd, #6d79ef 62%, #866bea); box-shadow: 0 12px 28px rgba(67, 87, 221, .22); }
 .hero-date { margin-bottom: 8px; font-size: 13px; letter-spacing: 1px; opacity: .78; }
 .today-hero h1 { margin: 0 0 12px; font-size: 30px; }
@@ -418,6 +544,7 @@ export default {
 .task-tags .el-tag { margin-right: 6px; }
 .task-main h3 { margin: 10px 0 7px; overflow: hidden; font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
 .task-main p { margin: 0 0 10px; color: #758096; font-size: 13px; }
+.task-main .task-reason { margin-top:-3px; color:#6574a2; font-size:12px; line-height:1.6; }
 .task-meta { display: flex; flex-wrap: wrap; gap: 18px; color: #9ba3b3; font-size: 12px; }
 .task-meta i { margin-right: 3px; }
 .recall-tip { padding: 12px 15px; margin-bottom: 18px; color: #5365d7; border-radius: 8px; background: #f0f2ff; }
@@ -442,6 +569,7 @@ export default {
 .correct-answer span { color: #2e9d76; }
 .analysis-answer { background: #f4f5fb; }
 .analysis-answer span { color: #6471ca; }
+.feedback-projection { padding:14px 16px; margin:14px 0; border-radius:8px; background:#f8f9fe; }.feedback-projection > p { margin:6px 0 10px; color:#8b94a8; font-size:12px; line-height:1.6; }.projection-list { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:8px; }.projection-item { padding:9px; border:1px solid #eceffa; border-radius:6px; background:#fff; }.projection-item b,.projection-item span,.projection-item small { display:block; }.projection-item b { color:#5669d5; font-size:12px; }.projection-item span { margin:3px 0; color:#46516b; font-size:12px; }.projection-item small { color:#9ba4b3; font-size:11px; line-height:1.45; }
 .feedback-title { margin: 22px 0 12px; font-size: 15px; font-weight: 600; text-align: center; }
 .feedback-list { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
 .feedback-button { padding: 14px 8px; border: 1px solid transparent; border-radius: 9px; background: #f7f8fa; cursor: pointer; transition: all .2s; }
@@ -464,6 +592,7 @@ export default {
   .task-order { display: none; }
   .task-meta { gap: 8px; flex-direction: column; }
   .feedback-list { grid-template-columns: repeat(2, 1fr); }
+  .projection-list { grid-template-columns:1fr; }
   .subject-filter { align-items: flex-start; flex-direction: column; }
   .subject-filter > small { margin-left: 0; }
 }

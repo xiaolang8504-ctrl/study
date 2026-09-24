@@ -22,6 +22,7 @@ import com.study.module.system.wrongquestion.dto.request.QuestionCaptureRegionSp
 import com.study.module.system.wrongquestion.dto.request.QuestionCaptureRegionSnapshotReq;
 import com.study.module.system.wrongquestion.dto.request.QuestionCaptureRegionSnapshotItemReq;
 import com.study.module.system.wrongquestion.dto.request.QuestionCaptureRegionUpdateReq;
+import com.study.module.system.wrongquestion.dto.request.QuestionCaptureRegionBatchUpdateReq;
 import com.study.module.system.wrongquestion.dto.request.QuestionCaptureTaskCreateReq;
 import com.study.module.system.wrongquestion.dto.request.QuestionCaptureTaskPageListReq;
 import com.study.module.system.wrongquestion.dto.response.QuestionCapturePageResp;
@@ -40,8 +41,12 @@ import com.study.module.system.wrongquestion.service.QuestionCaptureRegionServic
 import com.study.module.system.wrongquestion.service.QuestionCaptureService;
 import com.study.module.system.wrongquestion.service.QuestionCaptureTaskService;
 import com.study.module.system.wrongquestion.service.QuestionCaptureEventService;
+import com.study.module.system.wrongquestion.service.QuestionCaptureImageService;
+import com.study.module.system.wrongquestion.service.QuestionCaptureDocumentService;
 import com.study.module.system.wrongquestion.service.WrongQuestionService;
 import com.study.module.system.wrongquestion.service.WrongQuestionTimelineService;
+import com.study.module.system.wrongquestion.service.WrongQuestionAssetService;
+import com.study.module.system.wrongquestion.utils.WrongQuestionContentUtils;
 import com.yunshang.budget.common.mybatis.utils.PageUtils;
 import com.yunshang.budget.common.security.utils.AccountUtils;
 import org.apache.dubbo.config.annotation.DubboReference;
@@ -98,6 +103,12 @@ public class QuestionCaptureServiceImpl implements QuestionCaptureService {
     private QuestionCaptureEventService questionCaptureEventService;
     @Autowired
     private WrongQuestionTimelineService wrongQuestionTimelineService;
+    @Autowired
+    private WrongQuestionAssetService wrongQuestionAssetService;
+    @Autowired
+    private QuestionCaptureImageService questionCaptureImageService;
+    @Autowired
+    private QuestionCaptureDocumentService questionCaptureDocumentService;
 
     /**
      * 创建或保存题目采集。
@@ -126,7 +137,16 @@ public class QuestionCaptureServiceImpl implements QuestionCaptureService {
                 return existedTask.getId();
             }
         }
-        List<FileData> sourceFileList = checkCaptureSourceFiles(request.getImageFileIds(), userId);
+        List<Long> sourceFileIds = request.getImageFileIds() == null ? Collections.emptyList() : request.getImageFileIds();
+        List<FileData> sourceFileList = checkCaptureSourceFiles(sourceFileIds, userId);
+        boolean hasPastedDocument = trimToNull(request.getDocumentContent()) != null;
+        List<Long> docxFileIds = new ArrayList<>();
+        for (int index = 0; index < sourceFileIds.size(); index++) {
+            if (QuestionCaptureFileType.isDocx(sourceFileList.get(index).getFileExtension())) docxFileIds.add(sourceFileIds.get(index));
+        }
+        if ((!docxFileIds.isEmpty() || hasPastedDocument) && docxFileIds.size() != sourceFileIds.size()) {
+            throw new LogicException(ErrorCodeConstants.WRONG_QUESTION_IMPORT_FAIL);
+        }
         LocalDateTime now = LocalDateTime.now();
         QuestionCaptureTask task = WrongQuestionConvert.INSTANCE.toQuestionCaptureTask(request);
         task.setGrade(resolveDictValue(WrongQuestionDictType.GRADE, request.getGrade()));
@@ -160,9 +180,10 @@ public class QuestionCaptureServiceImpl implements QuestionCaptureService {
 
         int pageNo = 1;
         List<Long> pdfFileIds = new ArrayList<>();
-        for (int index = 0; index < request.getImageFileIds().size(); index++) {
-            Long fileId = request.getImageFileIds().get(index);
+        for (int index = 0; index < sourceFileIds.size(); index++) {
+            Long fileId = sourceFileIds.get(index);
             FileData fileData = sourceFileList.get(index);
+            if (QuestionCaptureFileType.isDocx(fileData.getFileExtension())) continue;
             if (QuestionCaptureFileType.isPdf(fileData.getFileExtension())) {
                 pdfFileIds.add(fileId);
                 continue;
@@ -182,7 +203,10 @@ public class QuestionCaptureServiceImpl implements QuestionCaptureService {
         }
         questionCaptureEventService.record(task.getId(), null, null, userId, null, "TASK_CREATED", "SUCCESS",
                 null, null, 0, null, null);
-        if (pdfFileIds.isEmpty()) {
+        if (!docxFileIds.isEmpty() || hasPastedDocument) {
+            dispatchAfterCommit(() -> questionCaptureDocumentService.importQuestionCaptureDocuments(task.getId(), docxFileIds,
+                    request.getDocumentContent(), request.getDocumentTitle()));
+        } else if (pdfFileIds.isEmpty()) {
             dispatchAfterCommit(() -> questionCaptureOcrService.recognizeQuestionCaptureTask(task.getId()));
         } else {
             dispatchAfterCommit(() -> questionCapturePdfService.renderQuestionCapturePdfs(task.getId(), pdfFileIds));
@@ -279,6 +303,7 @@ public class QuestionCaptureServiceImpl implements QuestionCaptureService {
      * 更新题目采集。
      */
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void updateQuestionCaptureRegion(QuestionCaptureRegionUpdateReq request) {
         QuestionCaptureRegion region = checkWaitingRegion(request.getId());
         validateRegionPosition(request.getLeftPosition(), request.getTopPosition(), request.getWidth(), request.getHeight());
@@ -288,21 +313,74 @@ public class QuestionCaptureServiceImpl implements QuestionCaptureService {
         region.setCorrectAnswer(request.getCorrectAnswer());
         region.setWrongReason(request.getWrongReason());
         region.setAnalysis(request.getAnalysis());
-        region.setGrade(request.getGrade());
-        region.setSubject(request.getSubject());
-        region.setQuestionType(request.getQuestionType());
-        region.setSource(request.getSource());
+        region.setGrade(resolveOptionalDictValue(WrongQuestionDictType.GRADE, request.getGrade()));
+        region.setSubject(resolveOptionalDictValue(WrongQuestionDictType.SUBJECT, request.getSubject()));
+        region.setQuestionType(resolveOptionalDictValue(WrongQuestionDictType.QUESTION_TYPE, request.getQuestionType()));
+        region.setSource(resolveOptionalDictValue(WrongQuestionDictType.SOURCE, request.getSource()));
         region.setLearningPoint(request.getLearningPoint());
         region.setErrorLabels(request.getErrorLabels());
+        if (request.getCleanImageMode() != null) {
+            validateAndSetCleanImageMode(region, request.getCleanImageMode());
+        }
         region.setLeftPosition(request.getLeftPosition());
         region.setTopPosition(request.getTopPosition());
         region.setWidth(request.getWidth());
         region.setHeight(request.getHeight());
         region.setManuallyCorrected(1);
         region.setUpdateTime(LocalDateTime.now());
-        questionCaptureRegionService.updateById(region);
+        if (!questionCaptureRegionService.updateById(region)) {
+            throw new LogicException(ErrorCodeConstants.WRONG_QUESTION_IMPORT_FAIL);
+        }
         questionCaptureEventService.record(region.getTaskId(), region.getPageId(), region.getId(),
                 AccountUtils.getUserId(), null, "REGION_UPDATED", "SUCCESS", null, null, null, null, null);
+    }
+
+    /**
+     * 先校验任务归属及全部题块，再在一个事务中批量更新，防止部分题块被修改。
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void batchUpdateQuestionCaptureRegion(QuestionCaptureRegionBatchUpdateReq request) {
+        QuestionCaptureTask task = checkTask(request.getTaskId());
+        ensureTaskWaitingConfirm(task);
+        Set<Long> regionIds = new LinkedHashSet<>(request.getRegionIds());
+        if (regionIds.size() != request.getRegionIds().size() || regionIds.contains(null)) {
+            throw new LogicException(ErrorCodeConstants.WRONG_QUESTION_IMPORT_FAIL);
+        }
+        String grade = trimToNull(request.getGrade());
+        String subject = trimToNull(request.getSubject());
+        String questionType = trimToNull(request.getQuestionType());
+        String source = trimToNull(request.getSource());
+        String learningPoint = trimToNull(request.getLearningPoint());
+        if (grade == null && subject == null && questionType == null && source == null && learningPoint == null) {
+            throw new LogicException(ErrorCodeConstants.WRONG_QUESTION_IMPORT_FAIL);
+        }
+        if (grade != null) grade = resolveDictValue(WrongQuestionDictType.GRADE, grade);
+        if (subject != null) subject = resolveDictValue(WrongQuestionDictType.SUBJECT, subject);
+        if (questionType != null) questionType = resolveDictValue(WrongQuestionDictType.QUESTION_TYPE, questionType);
+        if (source != null) source = resolveDictValue(WrongQuestionDictType.SOURCE, source);
+        List<QuestionCaptureRegion> regions = questionCaptureRegionService.list(new LambdaQueryWrapper<QuestionCaptureRegion>()
+                .eq(QuestionCaptureRegion::getTaskId, task.getId())
+                .in(QuestionCaptureRegion::getId, regionIds)
+                .eq(QuestionCaptureRegion::getStatus, REGION_WAITING_CONFIRM));
+        if (regions.size() != regionIds.size()) {
+            throw new LogicException(ErrorCodeConstants.WRONG_QUESTION_IMPORT_FAIL);
+        }
+        LocalDateTime now = LocalDateTime.now();
+        for (QuestionCaptureRegion region : regions) {
+            if (grade != null) region.setGrade(grade);
+            if (subject != null) region.setSubject(subject);
+            if (questionType != null) region.setQuestionType(questionType);
+            if (source != null) region.setSource(source);
+            if (learningPoint != null) region.setLearningPoint(learningPoint);
+            region.setManuallyCorrected(1);
+            region.setUpdateTime(now);
+            if (!questionCaptureRegionService.updateById(region)) {
+                throw new LogicException(ErrorCodeConstants.WRONG_QUESTION_IMPORT_FAIL);
+            }
+        }
+        questionCaptureEventService.record(task.getId(), null, null, AccountUtils.getUserId(), null,
+                "REGIONS_BATCH_UPDATED", "SUCCESS", null, null, regions.size(), null, null);
     }
 
     /**
@@ -594,6 +672,53 @@ public class QuestionCaptureServiceImpl implements QuestionCaptureService {
                 page.getImageFileId(), "PAGE_SAVED_AS_IMAGE", "SUCCESS", null, null, 1, null, null);
     }
 
+    @Override
+    public void generateQuestionCaptureCleanImage(Long id) {
+        QuestionCapturePage page = questionCapturePageService.getById(id);
+        if (page == null) {
+            throw new LogicException(ErrorCodeConstants.WRONG_QUESTION_IMPORT_FAIL);
+        }
+        checkTask(page.getTaskId());
+        if (page.getImageFileId() == null || Integer.valueOf(1).equals(page.getCleanStatus())) {
+            throw new LogicException(ErrorCodeConstants.WRONG_QUESTION_IMPORT_FAIL);
+        }
+        questionCaptureImageService.generateCleanedImage(id);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void revertQuestionCaptureCleanImage(Long id) {
+        QuestionCapturePage page = questionCapturePageService.getById(id);
+        if (page == null) {
+            throw new LogicException(ErrorCodeConstants.WRONG_QUESTION_IMPORT_FAIL);
+        }
+        checkTask(page.getTaskId());
+        questionCaptureImageService.revertCleanedImage(id);
+        // 题块选择清理图的前提已不成立；将未确认题块局部恢复为原图。
+        List<QuestionCaptureRegion> regions = questionCaptureRegionService.list(new LambdaQueryWrapper<QuestionCaptureRegion>()
+                .eq(QuestionCaptureRegion::getPageId, id).eq(QuestionCaptureRegion::getStatus, REGION_WAITING_CONFIRM));
+        LocalDateTime now = LocalDateTime.now();
+        for (QuestionCaptureRegion region : regions) {
+            if ("CLEANED".equals(region.getCleanImageMode())) {
+                region.setCleanImageMode("ORIGINAL");
+                region.setManuallyCorrected(1);
+                region.setUpdateTime(now);
+                questionCaptureRegionService.updateById(region);
+            }
+        }
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void applyQuestionCaptureManualCleanImage(Long id, Long cleanedFileId) {
+        QuestionCapturePage page = questionCapturePageService.getById(id);
+        if (page == null || cleanedFileId == null) {
+            throw new LogicException(ErrorCodeConstants.WRONG_QUESTION_IMPORT_FAIL);
+        }
+        checkTask(page.getTaskId());
+        questionCaptureImageService.applyManualCleanImage(id, cleanedFileId);
+    }
+
     /**
      * 检查当前学生是否已经收录了同年级、同科目且规范化题干一致的错题。
      */
@@ -673,6 +798,7 @@ public class QuestionCaptureServiceImpl implements QuestionCaptureService {
             WrongQuestion question = createWrongQuestion(task, region, userId, now);
             wrongQuestionService.fillDictNames(question);
             wrongQuestionService.save(question);
+            wrongQuestionAssetService.rewriteAssets(question);
             wrongQuestionTimelineService.record(question.getId(), "CAPTURE_CONFIRMED", "OCR",
                     "已由采集题块确认创建，OCR 结果已由学生确认", userId);
             region.setStatus(REGION_CONFIRMED);
@@ -708,6 +834,9 @@ public class QuestionCaptureServiceImpl implements QuestionCaptureService {
         question.setStatus(0);
         question.setQuestionTitle(emptyDefault(region.getQuestionTitle(), "图片识别错题"));
         question.setQuestionContent(emptyDefault(region.getQuestionContent(), region.getQuestionTitle()));
+        question.setContentFormat("TEXT");
+        question.setQuestionFingerprint(WrongQuestionContentUtils.fingerprint(
+                question.getQuestionTitle(), question.getQuestionContent(), question.getOptionsJson()));
         question.setWrongAnswer(region.getWrongAnswer());
         question.setCorrectAnswer(region.getCorrectAnswer());
         question.setWrongReason(region.getWrongReason());
@@ -715,6 +844,11 @@ public class QuestionCaptureServiceImpl implements QuestionCaptureService {
         QuestionCapturePage capturePage = questionCapturePageService.getById(region.getPageId());
         if (capturePage != null && capturePage.getImageFileId() != null) {
             question.setImageUrl(String.valueOf(capturePage.getImageFileId()));
+            question.setCaptureOriginalFileId(capturePage.getImageFileId());
+            question.setCaptureCleanedFileId(capturePage.getCleanedFileId());
+            question.setCaptureImageMode("CLEANED".equals(region.getCleanImageMode())
+                    && Integer.valueOf(2).equals(capturePage.getCleanStatus()) && capturePage.getCleanedFileId() != null
+                    ? "CLEANED" : "ORIGINAL");
             question.setCaptureTaskId(task.getId());
             question.setCapturePageId(capturePage.getId());
             question.setCaptureRegionId(region.getId());
@@ -780,6 +914,11 @@ public class QuestionCaptureServiceImpl implements QuestionCaptureService {
                 .orElseThrow(() -> new LogicException(ErrorCodeConstants.INVALID_DICT_DATA_IDS));
     }
 
+    private String resolveOptionalDictValue(String dictType, String value) {
+        String normalizedValue = trimToNull(value);
+        return normalizedValue == null ? null : resolveDictValue(dictType, normalizedValue);
+    }
+
     private String firstNotBlank(String preferredValue, String defaultValue) {
         return trimToNull(preferredValue) == null ? defaultValue : preferredValue;
     }
@@ -837,6 +976,20 @@ public class QuestionCaptureServiceImpl implements QuestionCaptureService {
                 || left + width > 10000 || top + height > 10000) {
             throw new LogicException(ErrorCodeConstants.WRONG_QUESTION_IMPORT_FAIL);
         }
+    }
+
+    private void validateAndSetCleanImageMode(QuestionCaptureRegion region, String cleanImageMode) {
+        String normalized = cleanImageMode == null ? null : cleanImageMode.trim().toUpperCase(java.util.Locale.ROOT);
+        if (!"ORIGINAL".equals(normalized) && !"CLEANED".equals(normalized)) {
+            throw new LogicException(ErrorCodeConstants.WRONG_QUESTION_IMPORT_FAIL);
+        }
+        if ("CLEANED".equals(normalized)) {
+            QuestionCapturePage page = questionCapturePageService.getById(region.getPageId());
+            if (page == null || !Integer.valueOf(2).equals(page.getCleanStatus()) || page.getCleanedFileId() == null) {
+                throw new LogicException(ErrorCodeConstants.WRONG_QUESTION_IMPORT_FAIL);
+            }
+        }
+        region.setCleanImageMode(normalized);
     }
 
     /**

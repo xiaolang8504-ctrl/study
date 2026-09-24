@@ -9,6 +9,8 @@
           <el-button size="small" icon="el-icon-document-delete" @click="openDuplicateHistory">重复题清理</el-button>
           <el-button size="small" icon="el-icon-warning-outline" @click="openReports">举报处理</el-button>
           <el-button size="small" @click="openKnowledgeManagement">知识点管理</el-button>
+          <el-button size="small" @click="openPrerequisiteManagement">知识关系</el-button>
+          <el-button size="small" @click="openVariantManagement">变式模板</el-button>
           <el-button size="small" type="warning" icon="el-icon-upload2" @click="openOcrImport">导入A4文件</el-button>
           <el-button size="small" type="primary" icon="el-icon-plus" @click="openForm()">新增题目</el-button>
         </div>
@@ -25,6 +27,9 @@
         <el-form-item><el-input v-model="query.keyWord" placeholder="搜索题目" clearable @keyup.enter.native="loadList" /></el-form-item>
         <el-form-item><el-select v-model="query.grade" filterable clearable placeholder="请选择年级"><el-option v-for="item in gradeOptions" :key="item.key" :label="item.value" :value="item.key" /></el-select></el-form-item>
         <el-form-item><el-select v-model="query.subject" filterable clearable placeholder="请选择科目"><el-option v-for="item in subjectOptions" :key="item.key" :label="item.value" :value="item.key" /></el-select></el-form-item>
+        <el-form-item><el-input v-model.trim="query.textbookVersion" clearable placeholder="教材版本" /></el-form-item>
+        <el-form-item><el-input v-model.trim="query.region" clearable placeholder="真题地区" /></el-form-item>
+        <el-form-item><el-input-number v-model="query.examYear" :min="1900" :max="2100" controls-position="right" placeholder="年份" /></el-form-item>
         <el-form-item>
           <el-select v-model="query.reviewStatus" placeholder="审核状态" clearable>
             <el-option label="待审核" :value="0" /><el-option label="已通过" :value="1" /><el-option label="已驳回" :value="2" />
@@ -38,14 +43,16 @@
         <el-table-column prop="questionTitle" label="题目" min-width="260" show-overflow-tooltip />
         <el-table-column prop="subjectName" label="科目" width="90"><template slot-scope="{row}">{{ row.subjectName || row.subject }}</template></el-table-column>
         <el-table-column prop="gradeName" label="年级" width="90"><template slot-scope="{row}">{{ row.gradeName || row.grade }}</template></el-table-column>
+        <el-table-column label="教材/真题范围" min-width="190"><template slot-scope="{row}"><div v-if="row.textbookVersion || row.chapterName">{{ row.textbookVersion || '未绑定版本' }}<span v-if="row.chapterName"> · {{ row.chapterName }}</span></div><div v-if="row.region || row.examYear || row.paperType" class="source-meta">{{ [row.region, row.examYear, row.paperType].filter(Boolean).join(' · ') }}</div><span v-if="!row.textbookVersion && !row.chapterName && !row.region && !row.examYear && !row.paperType">-</span></template></el-table-column>
         <el-table-column label="知识点" min-width="160"><template slot-scope="{row}"><el-tag v-for="item in row.knowledgePointNames" :key="item" size="mini">{{ item }}</el-tag></template></el-table-column>
         <el-table-column prop="difficulty" label="难度" width="70" />
         <el-table-column label="审核" width="90"><template slot-scope="{row}"><el-tag :type="statusType(row.reviewStatus)">{{ statusText(row.reviewStatus) }}</el-tag></template></el-table-column>
         <el-table-column label="状态" width="75"><template slot-scope="{row}">{{ row.enable === 1 ? '启用' : '停用' }}</template></el-table-column>
-        <el-table-column label="操作" width="310" fixed="right">
+        <el-table-column label="操作" width="360" fixed="right">
           <template slot-scope="{row}">
             <el-button type="text" @click="openForm(row)">编辑</el-button>
             <el-button type="text" @click="openHistory(row)">历史</el-button>
+            <el-button type="text" class="warning" @click="openGovernance(row)">{{ row.enable === 1 ? '内容治理' : '恢复治理' }}</el-button>
             <el-button v-if="row.reviewStatus !== 1" type="text" class="success" @click="review(row, 1)">通过</el-button>
             <el-button v-if="row.reviewStatus === 1" type="text" class="warning" @click="review(row, 2)">驳回</el-button>
             <el-button type="text" class="danger" @click="remove(row)">删除</el-button>
@@ -68,6 +75,10 @@
         <el-form-item label="判题方式" prop="judgeMode"><el-radio-group v-model="form.judgeMode"><el-radio label="AUTO">客观题自动判题</el-radio><el-radio label="SELF">主观题查看答案后自评</el-radio></el-radio-group></el-form-item>
         <el-form-item label="解析"><el-input v-model="form.analysis" type="textarea" :rows="3" /></el-form-item>
         <el-row :gutter="16"><el-col :span="12"><el-form-item label="难度"><el-rate v-model="form.difficulty" /></el-form-item></el-col><el-col :span="12"><el-form-item label="来源" prop="source"><el-select v-model="form.source" filterable class="full" placeholder="请选择来源"><el-option v-for="item in sourceOptions" :key="item.key" :label="item.value" :value="item.key" /></el-select></el-form-item></el-col></el-row>
+        <el-row :gutter="16"><el-col :span="12"><el-form-item label="教材版本"><el-input v-model.trim="form.textbookVersion" placeholder="如 人教版·2024" /></el-form-item></el-col><el-col :span="12"><el-form-item label="教材章节"><el-input v-model.trim="form.chapterName" placeholder="如 八上·一次函数" /></el-form-item></el-col></el-row>
+        <el-row :gutter="16"><el-col :span="8"><el-form-item label="真题地区"><el-input v-model.trim="form.region" placeholder="如 杭州" /></el-form-item></el-col><el-col :span="8"><el-form-item label="真题年份"><el-input-number v-model="form.examYear" :min="1900" :max="2100" controls-position="right" class="full" /></el-form-item></el-col><el-col :span="8"><el-form-item label="卷型"><el-input v-model.trim="form.paperType" placeholder="模拟/中考" /></el-form-item></el-col></el-row>
+        <el-row :gutter="16"><el-col :span="12"><el-form-item label="内容提供方"><el-input v-model.trim="form.provider" /></el-form-item></el-col><el-col :span="12"><el-form-item label="外部题目编号"><el-input v-model.trim="form.externalId" /></el-form-item></el-col></el-row>
+        <el-row :gutter="16"><el-col :span="8"><el-form-item label="授权说明"><el-input v-model.trim="form.license" /></el-form-item></el-col><el-col :span="8"><el-form-item label="授权版本"><el-input v-model.trim="form.licenseVersion" /></el-form-item></el-col><el-col :span="8"><el-form-item label="授权到期"><el-date-picker v-model="form.expireAt" type="date" value-format="yyyy-MM-dd" class="full" /></el-form-item></el-col></el-row>
         <el-form-item label="知识点"><el-select v-model="form.knowledgePointIds" multiple filterable class="full"><el-option v-for="p in knowledge" :key="p.id" :label="p.pointName" :value="p.id" /></el-select></el-form-item>
         <el-form-item label="启用"><el-switch v-model="form.enable" :active-value="1" :inactive-value="0" /></el-form-item>
       </el-form>
@@ -139,6 +150,7 @@
             <el-table-column prop="correctAnswer" label="答案" min-width="110" show-overflow-tooltip />
             <el-table-column prop="operatorId" label="操作人" width="85" />
             <el-table-column prop="createTime" label="保存时间" width="170" />
+            <el-table-column label="操作" width="90"><template slot-scope="{row}"><el-button type="text" @click="rollback(row)">回退</el-button></template></el-table-column>
           </el-table>
         </el-tab-pane>
         <el-tab-pane label="审核历史" name="review">
@@ -149,7 +161,21 @@
             <el-table-column prop="reviewTime" label="审核时间" width="180" />
           </el-table>
         </el-tab-pane>
+        <el-tab-pane label="内容治理" name="governance">
+          <el-alert type="info" :closable="false" title="下架仅停止后续推荐；已创建的练习会话和作答快照保持不变。" class="dialog-alert" />
+          <el-table :data="governanceHistory" border max-height="440"><el-table-column prop="action" label="动作" width="130"/><el-table-column prop="issueType" label="问题类型" width="150"/><el-table-column prop="handleRemark" label="说明" min-width="240" show-overflow-tooltip/><el-table-column prop="licenseVersion" label="授权版本" width="110"/><el-table-column prop="expireAt" label="到期日" width="110"/><el-table-column prop="targetVersionNo" label="回退目标" width="90"/><el-table-column prop="createTime" label="操作时间" width="170"/></el-table>
+        </el-tab-pane>
       </el-tabs>
+    </el-dialog>
+    <el-dialog :title="`内容治理 · ${governanceQuestion.questionTitle || ''}`" :visible.sync="governanceOpen" width="620px" append-to-body>
+      <el-alert type="warning" :closable="false" show-icon title="下架或授权到期将停止后续推荐，已经创建的练习会话与作答快照不会改写。" class="dialog-alert" />
+      <el-form :model="governanceForm" label-width="112px">
+        <el-form-item label="治理动作"><el-select v-model="governanceForm.action" class="full"><el-option label="下架并停止推荐" value="DOWN"/><el-option label="恢复投放" value="RESTORE"/><el-option label="更新授权边界" value="LICENSE_UPDATE"/><el-option label="登记版权/授权凭证" value="RECORD_PROOF"/></el-select></el-form-item>
+        <el-form-item label="问题类型"><el-select v-model="governanceForm.issueType" class="full"><el-option label="题干错误" value="STEM_ERROR"/><el-option label="答案错误" value="ANSWER_ERROR"/><el-option label="解析错误" value="ANALYSIS_ERROR"/><el-option label="超纲" value="OUT_OF_SYLLABUS"/><el-option label="重复题" value="DUPLICATE"/><el-option label="侵权" value="INFRINGEMENT"/><el-option label="授权到期" value="LICENSE_EXPIRED"/></el-select></el-form-item>
+        <el-form-item label="说明"><el-input v-model.trim="governanceForm.handleRemark" type="textarea" :rows="3" maxlength="500" show-word-limit placeholder="填写处置依据、下架原因或授权说明" /></el-form-item>
+        <template v-if="governanceForm.action === 'LICENSE_UPDATE' || governanceForm.action === 'RECORD_PROOF'"><el-row :gutter="12"><el-col :span="12"><el-form-item label="授权版本"><el-input v-model.trim="governanceForm.licenseVersion" /></el-form-item></el-col><el-col :span="12"><el-form-item label="授权到期"><el-date-picker v-model="governanceForm.expireAt" type="date" value-format="yyyy-MM-dd" class="full" /></el-form-item></el-col></el-row><el-form-item label="凭证文件"><el-upload action="" :show-file-list="false" :http-request="uploadGovernanceProof"><el-button size="small" icon="el-icon-upload2">上传授权/版权凭证</el-button></el-upload><div v-if="governanceProofs.length" class="form-tip">已关联：{{ governanceProofs.map(item => item.name).join('、') }}</div></el-form-item></template>
+      </el-form>
+      <div slot="footer"><el-button @click="governanceOpen=false">取消</el-button><el-button type="primary" @click="submitGovernance">确认治理</el-button></div>
     </el-dialog>
     <el-dialog title="题目举报处理" :visible.sync="reportOpen" width="900px" append-to-body>
       <el-form :inline="true" size="small"><el-form-item><el-select v-model="reportQuery.status" placeholder="处理状态" clearable><el-option label="待处理" :value="0"/><el-option label="已处理" :value="1"/><el-option label="无效" :value="2"/></el-select></el-form-item><el-form-item><el-button type="primary" @click="loadReports">查询</el-button></el-form-item></el-form>
@@ -198,11 +224,22 @@
       <el-form :inline="true" size="small"><el-form-item><el-select v-model="appealStatus" clearable placeholder="处理状态"><el-option label="待复核" :value="0"/><el-option label="已复核" :value="1"/></el-select></el-form-item><el-form-item><el-button type="primary" @click="loadAppeals">查询</el-button></el-form-item></el-form>
       <el-table :data="appeals" border max-height="500"><el-table-column prop="questionTitle" label="题目" min-width="180"/><el-table-column prop="studentAnswer" label="学生答案" min-width="150"/><el-table-column prop="correctAnswer" label="标准答案" min-width="150"/><el-table-column prop="appealReason" label="申诉原因" min-width="180"/><el-table-column label="状态" width="80"><template slot-scope="{row}">{{ row.status === 0 ? '待复核' : '已复核' }}</template></el-table-column><el-table-column label="操作" width="150"><template slot-scope="{row}"><el-button v-if="row.status===0" type="text" @click="reviewAppeal(row,true)">判定正确</el-button><el-button v-if="row.status===0" type="text" class="warning" @click="reviewAppeal(row,false)">判定错误</el-button><span v-else>{{ row.reviewCorrect === 1 ? '正确' : '错误' }}</span></template></el-table-column></el-table>
     </el-dialog>
+    <el-dialog title="知识点前置关系" :visible.sync="prerequisiteOpen" width="820px" append-to-body>
+      <el-alert type="info" :closable="false" title="前置关系用于生成“前置补缺—当前薄弱—间隔巩固”学习路径；两端必须属于同一年级、同一科目。" class="dialog-alert" />
+      <el-form :inline="true" size="small"><el-form-item label="当前知识点"><el-select v-model="prerequisiteForm.knowledgePointId" filterable><el-option v-for="item in knowledgeTreeFlat" :key="item.id" :label="item.pointName" :value="item.id" /></el-select></el-form-item><el-form-item label="前置知识点"><el-select v-model="prerequisiteForm.prerequisitePointId" filterable><el-option v-for="item in knowledgeTreeFlat" :key="item.id" :label="item.pointName" :value="item.id" /></el-select></el-form-item><el-form-item label="版本"><el-input v-model.trim="prerequisiteForm.relationVersion" placeholder="v1" /></el-form-item><el-button type="primary" @click="savePrerequisite">保存关系</el-button></el-form>
+      <el-table :data="prerequisites" border max-height="400"><el-table-column prop="knowledgePointName" label="当前知识点"/><el-table-column prop="prerequisitePointName" label="前置知识点"/><el-table-column prop="relationVersion" label="版本" width="100"/><el-table-column label="状态" width="90"><template slot-scope="{row}">{{ row.enable === 1 ? '启用' : '停用' }}</template></el-table-column></el-table>
+    </el-dialog>
+    <el-dialog title="参数化变式题模板" :visible.sync="variantOpen" width="940px" append-to-body>
+      <el-alert type="warning" :closable="false" title="仅支持 ADD(a,b)、SUBTRACT(a,b)、MULTIPLY(a,b) 三种确定性公式。生成题自动复算后仍需在题库中人工审核。" class="dialog-alert" />
+      <div class="variant-original"><span>关联原题 ID</span><el-input-number v-model="variantForm.originalQuestionId" :min="1" controls-position="right" /></div>
+      <el-form :model="variantForm" label-width="88px" size="small"><el-row :gutter="12"><el-col :span="8"><el-form-item label="模板编码"><el-input v-model.trim="variantForm.templateCode" /></el-form-item></el-col><el-col :span="8"><el-form-item label="模板名称"><el-input v-model.trim="variantForm.templateName" /></el-form-item></el-col><el-col :span="8"><el-form-item label="模板版本"><el-input v-model.trim="variantForm.templateVersion" placeholder="v1" /></el-form-item></el-col></el-row><el-row :gutter="12"><el-col :span="8"><el-form-item label="年级"><el-select v-model="variantForm.grade" class="full"><el-option v-for="item in gradeOptions" :key="item.key" :label="item.value" :value="item.key" /></el-select></el-form-item></el-col><el-col :span="8"><el-form-item label="科目"><el-select v-model="variantForm.subject" class="full"><el-option v-for="item in subjectOptions" :key="item.key" :label="item.value" :value="item.key" /></el-select></el-form-item></el-col><el-col :span="8"><el-form-item label="题型"><el-select v-model="variantForm.questionType" class="full"><el-option v-for="item in questionTypeOptions" :key="item.key" :label="item.value" :value="item.key" /></el-select></el-form-item></el-col></el-row><el-form-item label="题干模板"><el-input v-model.trim="variantForm.questionPattern" placeholder="计算 {{a}} + {{b}} = ?" /></el-form-item><el-row :gutter="12"><el-col :span="12"><el-form-item label="答案公式"><el-input v-model.trim="variantForm.answerFormula" placeholder="ADD(a,b)" /></el-form-item></el-col><el-col :span="12"><el-form-item label="变量规则"><el-input v-model.trim="variantForm.variableSchemaJson" placeholder='[{"name":"a","min":1,"max":9},{"name":"b","min":1,"max":9}]' /></el-form-item></el-col></el-row><el-row :gutter="12"><el-col :span="12"><el-form-item label="主知识点"><el-select v-model="variantForm.primaryKnowledgePointId" filterable class="full"><el-option v-for="item in knowledgeTreeFlat" :key="item.id" :label="item.pointName" :value="item.id" /></el-select></el-form-item></el-col><el-col :span="12"><el-form-item label="难度"><el-rate v-model="variantForm.difficulty" /></el-form-item></el-col></el-row><el-form-item label="解析模板"><el-input v-model.trim="variantForm.analysisPattern" /></el-form-item><el-button type="primary" @click="saveVariantTemplate">保存模板</el-button><el-button @click="variantForm=emptyVariant()">新建</el-button></el-form>
+      <el-table :data="variantTemplates" border max-height="260" class="dialog-table"><el-table-column prop="templateName" label="模板" min-width="160"/><el-table-column prop="templateVersion" label="版本" width="80"/><el-table-column prop="primaryKnowledgePointName" label="知识点"/><el-table-column prop="answerFormula" label="公式"/><el-table-column label="操作" width="210"><template slot-scope="{row}"><el-button type="text" @click="variantForm=Object.assign(emptyVariant(),row)">编辑</el-button><el-button type="text" @click="generateVariant(row)">生成并校验</el-button></template></el-table-column></el-table>
+    </el-dialog>
   </div>
 </template>
 
 <script>
-import { batchReviewQuestionBank, cleanDuplicateQuestion, deleteKnowledgePoint, deleteQuestionBank, duplicateQuestionHistory, duplicateQuestionList, handleQuestionReport, importQuestionBankFile, knowledgePointList, knowledgePointTree, mergeDuplicateQuestion, questionBankPageList, questionBankReviewHistory, questionBankVersionList, questionExperimentDetail, questionExperimentHistory, questionPracticeAppealList, questionPracticeStatistics, questionReportPageList, reviewQuestionBank, reviewQuestionPracticeAppeal, saveKnowledgePoint, saveQuestionBank, saveQuestionExperiment } from '@/api/system/questionBank'
+import { batchReviewQuestionBank, cleanDuplicateQuestion, deleteKnowledgePoint, deleteQuestionBank, duplicateQuestionHistory, duplicateQuestionList, generateQuestionVariant, governQuestionContent, handleQuestionReport, importQuestionBankFile, knowledgePointList, knowledgePointPrerequisiteList, knowledgePointTree, mergeDuplicateQuestion, questionBankPageList, questionBankReviewHistory, questionBankVersionList, questionContentGovernanceList, questionExperimentDetail, questionExperimentHistory, questionPracticeAppealList, questionPracticeStatistics, questionReportPageList, questionVariantTemplateList, reviewQuestionBank, reviewQuestionPracticeAppeal, rollbackQuestionBankVersion, saveKnowledgePoint, saveKnowledgePointPrerequisite, saveQuestionBank, saveQuestionExperiment, saveQuestionVariantTemplate } from '@/api/system/questionBank'
 import LatexRenderer from '@/components/LatexRenderer.vue'
 import QuestionImageManager from '@/components/QuestionImageManager.vue'
 import QuestionOptionEditor from '@/components/QuestionOptionEditor.vue'
@@ -216,12 +253,14 @@ export default {
   components: { LatexRenderer, QuestionImageManager, QuestionOptionEditor },
   data() {
     return {
-      loading: false, rows: [], total: 0, query: { current: 1, pageSize: 10, keyWord: '', grade: '', subject: '', reviewStatus: null },
+      loading: false, rows: [], total: 0, query: { current: 1, pageSize: 10, keyWord: '', grade: '', subject: '', textbookVersion: '', region: '', examYear: null, reviewStatus: null },
       selectedQuestionIds: [],
-      formOpen: false, ocrImportOpen: false, knowledgeOpen: false, pointFormOpen: false, historyOpen: false, reportOpen: false, duplicateConfirmOpen: false, duplicateHistoryOpen: false, experimentOpen: false, appealOpen: false,
+      formOpen: false, ocrImportOpen: false, knowledgeOpen: false, pointFormOpen: false, prerequisiteOpen: false, variantOpen: false, historyOpen: false, governanceOpen: false, reportOpen: false, duplicateConfirmOpen: false, duplicateHistoryOpen: false, experimentOpen: false, appealOpen: false,
       knowledge: [], knowledgeTree: [], pointQuery: { grade: '', subject: '' }, gradeOptions: [], subjectOptions: [], questionTypeOptions: [], sourceOptions: [], form: {}, pointForm: this.emptyPoint(), duplicates: [], duplicatePairs: [], duplicateLoading: false, duplicateScanned: false,
       ocrImportForm: this.emptyOcrImportForm(), ocrKnowledge: [], ocrFileName: '', ocrUploading: false, ocrImporting: false,
-      historyQuestion: {}, historyTab: 'version', versions: [], reviewHistory: [],
+      prerequisites: [], prerequisiteForm: { knowledgePointId: null, prerequisitePointId: null, relationVersion: 'v1', enable: 1 }, variantTemplates: [], variantForm: this.emptyVariant(),
+      historyQuestion: {}, historyTab: 'version', versions: [], reviewHistory: [], governanceHistory: [],
+      governanceQuestion: {}, governanceForm: this.emptyGovernance(), governanceProofs: [],
       duplicateQuery: { grade: '', subject: '', similarityThreshold: 82, limit: 200 },
       experimentForm: this.emptyExperiment(), experimentHistory: [],
       appeals: [], appealStatus: 0,
@@ -234,16 +273,25 @@ export default {
   },
   created() { this.loadList(); this.loadStatistics(); this.loadDictOptions() },
   methods: {
-    emptyForm() { return { id: null, grade: '', subject: '', questionType: '', questionTitle: '', questionContent: '', contentFormat: 'TEXT', imageUrls: '', images: [], optionsJson: '', correctAnswer: '', judgeMode: 'AUTO', analysis: '', difficulty: 3, source: '', enable: 1, knowledgePointIds: [], duplicateConfirmed: false } },
+    emptyForm() { return { id: null, grade: '', subject: '', questionType: '', questionTitle: '', questionContent: '', contentFormat: 'TEXT', imageUrls: '', images: [], optionsJson: '', correctAnswer: '', judgeMode: 'AUTO', analysis: '', difficulty: 3, source: '', textbookVersion: '', chapterName: '', region: '', examYear: null, paperType: '', provider: '', externalId: '', license: '', licenseVersion: '', expireAt: null, enable: 1, knowledgePointIds: [], duplicateConfirmed: false } },
     emptyOcrImportForm() { return { grade: '', subject: '', questionType: '', source: '', fileId: null, judgeMode: 'SELF', difficulty: 3, knowledgePointIds: [] } },
+    emptyVariant() { return { id: null, templateCode: '', templateName: '', templateVersion: 'v1', originalQuestionId: null, grade: '', subject: '', questionType: '', questionPattern: '', answerFormula: 'ADD(a,b)', variableSchemaJson: '[{"name":"a","min":1,"max":9},{"name":"b","min":1,"max":9}]', analysisPattern: '', difficulty: 3, primaryKnowledgePointId: null, enable: 1 } },
     emptyPoint() { return { id: null, parentId: 0, pointCode: '', pointName: '', grade: '', subject: '', sort: 0, enable: 1 } },
     emptyExperiment() { return { id: null, experimentName: '相似题推荐策略实验', enable: 0, groupATraffic: 50, timeRange: [], remark: '' } },
+    emptyGovernance() { return { questionId: null, action: 'DOWN', issueType: 'STEM_ERROR', handleRemark: '', proofFileIds: [], licenseVersion: '', expireAt: null } },
     loadDictOptions() { Promise.all([dictDataOptions({ dictType: 'grade' }), dictDataOptions({ dictType: 'subject' }), dictDataOptions({ dictType: 'question_type' }), dictDataOptions({ dictType: 'source' })]).then(([grades, subjects, types, sources]) => { this.gradeOptions = grades || []; this.subjectOptions = subjects || []; this.questionTypeOptions = types || []; this.sourceOptions = sources || [] }).catch(() => { this.$message.warning('年级、科目、题型或来源字典加载失败') }) },
     changeQuestionScope() { this.form.knowledgePointIds = []; this.loadKnowledge() },
     loadList() { this.loading = true; questionBankPageList(this.query).then(data => { this.rows = data.list || []; this.total = data.total || 0 }).finally(() => { this.loading = false }) },
     loadStatistics() { questionPracticeStatistics().then(data => { this.statistics = data || {} }) },
     loadKnowledge() { if (!this.form.grade || !this.form.subject) { this.knowledge = []; return } knowledgePointList({ grade: this.form.grade, subject: this.form.subject }).then(data => { this.knowledge = data || [] }) },
     openKnowledgeManagement() { this.knowledgeOpen = true; this.loadKnowledgeTree() },
+    openPrerequisiteManagement() { this.prerequisiteOpen = true; this.loadKnowledgeTree(); this.loadPrerequisites() },
+    loadPrerequisites() { knowledgePointPrerequisiteList({}).then(rows => { this.prerequisites = rows || [] }) },
+    savePrerequisite() { if (!this.prerequisiteForm.knowledgePointId || !this.prerequisiteForm.prerequisitePointId) return this.$message.warning('请选择当前知识点和前置知识点'); saveKnowledgePointPrerequisite(this.prerequisiteForm).then(() => { this.$message.success('知识关系已保存'); this.prerequisiteForm = { knowledgePointId: null, prerequisitePointId: null, relationVersion: 'v1', enable: 1 }; this.loadPrerequisites() }) },
+    openVariantManagement() { this.variantOpen = true; this.loadKnowledgeTree(); this.loadVariantTemplates() },
+    loadVariantTemplates() { questionVariantTemplateList({}).then(rows => { this.variantTemplates = rows || [] }) },
+    saveVariantTemplate() { saveQuestionVariantTemplate(this.variantForm).then(() => { this.$message.success('模板已保存'); this.variantForm = this.emptyVariant(); this.loadVariantTemplates() }) },
+    generateVariant(row) { generateQuestionVariant({ templateId: row.id, seed: Date.now() }).then(result => { this.$message.success(`已生成并自动校验，题库编号 #${result.questionBankId}，请在列表审核后投放`); this.loadList() }) },
     loadKnowledgeTree() { knowledgePointTree(this.pointQuery).then(data => { this.knowledgeTree = data || [] }) },
     flattenPoints(points, depth = 0) { return (points || []).reduce((rows, point) => rows.concat([{ id: point.id, label: `${'　'.repeat(depth)}${point.pointName}` }], this.flattenPoints(point.children, depth + 1)), []) },
     startCreatePoint(parent) { this.pointForm = this.emptyPoint(); if (parent) { this.pointForm.parentId = parent.id; this.pointForm.grade = parent.grade; this.pointForm.subject = parent.subject } else { this.pointForm.grade = this.pointQuery.grade || ''; this.pointForm.subject = this.pointQuery.subject || '' } this.pointFormOpen = true },
@@ -272,19 +320,25 @@ export default {
     remove(row) { this.$confirm('确认删除该题及知识点关联吗？', '提示', { type: 'warning' }).then(() => deleteQuestionBank({ id: row.id })).then(() => { this.$message.success('已删除'); this.loadList() }).catch(() => {}) },
     submitPoint() { this.$refs.pointFormRef.validate(ok => { if (!ok) return; saveKnowledgePoint(this.pointForm).then(() => { this.$message.success('知识点已保存'); this.pointFormOpen = false; this.loadKnowledgeTree(); this.loadKnowledge() }) }) },
     removePoint(row) { this.$confirm(`确认删除知识点“${row.pointName}”吗？有下级或题目引用时将无法删除。`, '删除知识点', { type: 'warning' }).then(() => deleteKnowledgePoint({ id: row.id })).then(() => { this.$message.success('知识点已删除'); this.loadKnowledgeTree(); this.loadKnowledge() }).catch(() => {}) },
-    openHistory(row) { this.historyQuestion = row; this.historyTab = 'version'; this.historyOpen = true; Promise.all([questionBankVersionList({ id: row.id }), questionBankReviewHistory({ id: row.id })]).then(([versions, reviews]) => { this.versions = versions || []; this.reviewHistory = reviews || [] }) },
+    openHistory(row) { this.historyQuestion = row; this.historyTab = 'version'; this.historyOpen = true; Promise.all([questionBankVersionList({ id: row.id }), questionBankReviewHistory({ id: row.id }), questionContentGovernanceList({ id: row.id })]).then(([versions, reviews, governance]) => { this.versions = versions || []; this.reviewHistory = reviews || []; this.governanceHistory = governance || [] }) },
+    openGovernance(row) { this.governanceQuestion = row; this.governanceForm = this.emptyGovernance(); this.governanceForm.questionId = row.id; this.governanceForm.action = row.enable === 1 ? 'DOWN' : 'RESTORE'; this.governanceProofs = []; this.governanceOpen = true },
+    uploadGovernanceProof(options) { filePolicy({ uploadType: 'questionBank' }).then(policy => { const data = new FormData(); data.append('file', options.file); data.append('signature', policy.signature); data.append('fileName', options.file.name); return uploadFile(data) }).then(file => { this.governanceForm.proofFileIds.push(Number(file.id)); this.governanceProofs.push({ id: file.id, name: file.originName || options.file.name }); this.$message.success('凭证已关联') }).catch(() => {}) },
+    submitGovernance() { governQuestionContent(this.governanceForm).then(() => { this.$message.success(this.governanceForm.action === 'DOWN' ? '题目已下架，后续不会再被推荐' : '内容治理已保存'); this.governanceOpen = false; this.loadList(); if (this.historyOpen) this.openHistory(this.historyQuestion) }) },
+    rollback(version) { this.$confirm(`确认回退到 V${version.versionNo} 吗？回退后会停用并重新进入审核，历史练习快照不受影响。`, '回退题目版本', { type: 'warning' }).then(() => this.$prompt('请输入回退说明', '回退说明', { inputValue: '' })).then(({ value }) => rollbackQuestionBankVersion({ questionId: this.historyQuestion.id, versionNo: version.versionNo, handleRemark: value })).then(() => { this.$message.success('已回退，等待重新审核后才会恢复投放'); this.openHistory(this.historyQuestion); this.loadList() }).catch(() => {}) },
     openReports() { this.reportOpen = true; this.loadReports() },
     loadReports() { questionReportPageList(this.reportQuery).then(data => { this.reports = data.list || []; this.reportTotal = data.total || 0 }) },
     handleReport(row, status) { this.$prompt('填写处理备注', status === 1 ? '确认有效问题' : '标记无效', { inputValue: '' }).then(({ value }) => { if (status === 1) return this.$confirm('是否同时停用该题，防止继续推荐？', '题目处理', { confirmButtonText: '停用题目', cancelButtonText: '仅处理举报', distinguishCancelAndClose: true }).then(() => true).catch(action => action === 'cancel' ? false : Promise.reject(action)).then(disable => handleQuestionReport({ id: row.id, status, handleRemark: value, disableQuestion: disable })); return handleQuestionReport({ id: row.id, status, handleRemark: value, disableQuestion: false }) }).then(() => { this.$message.success('举报已处理'); this.loadReports(); this.loadStatistics(); this.loadList() }).catch(() => {}) },
+    flattenKnowledgeTree(items) { return (items || []).reduce((all, item) => all.concat([{ id: item.id, pointName: item.pointName }], this.flattenKnowledgeTree(item.children || [])), []) },
     statusText(v) { return ['待审核', '已通过', '已驳回'][v] || '未知' },
     statusType(v) { return v === 1 ? 'success' : (v === 2 ? 'danger' : 'warning') }
   },
   computed: {
-    pointFlatOptions() { return this.flattenPoints(this.knowledgeTree) }
+    pointFlatOptions() { return this.flattenPoints(this.knowledgeTree) },
+    knowledgeTreeFlat() { return (this.knowledgeTree || []).reduce((all, item) => all.concat([{ id: item.id, pointName: item.pointName }], this.flattenKnowledgeTree(item.children || [])), []) }
   }
 }
 </script>
 
 <style scoped>
-.header-row { display:flex; align-items:center; justify-content:space-between; }.hint { margin-left:14px; color:#909399; font-size:13px; }.statistics-row { margin:0 0 12px; }.experiment-alert { margin-bottom:12px; }.stat { padding:14px; border-radius:8px; background:#f5f7fa; display:flex; flex-direction:column; }.stat b { font-size:24px; color:#303133; }.stat span { margin-top:5px; color:#909399; font-size:13px; }.latex-preview { padding:12px; margin:0; background:#f5f7fa; border-radius:5px; white-space:pre-wrap; }.pagination { margin-top:20px; text-align:right; }.full { width:100%; }.danger { color:#f56c6c; }.warning { color:#e6a23c; }.success { color:#67c23a; }.el-tag { margin-right:4px; }.dialog-table { margin-top:16px; }.dialog-alert { margin-bottom:16px; }.history-filter { margin-top:16px; }.question-preview { margin-top:6px; color:#606266; line-height:1.45; max-height:44px; overflow:hidden; }.form-tip { color:#909399; font-size:12px; }.experiment-actions { margin-bottom:10px; }.ocr-file { margin-top:10px; display:flex; align-items:center; gap:8px; color:#606266; }
+.header-row { display:flex; align-items:center; justify-content:space-between; }.hint { margin-left:14px; color:#909399; font-size:13px; }.statistics-row { margin:0 0 12px; }.experiment-alert { margin-bottom:12px; }.stat { padding:14px; border-radius:8px; background:#f5f7fa; display:flex; flex-direction:column; }.stat b { font-size:24px; color:#303133; }.stat span { margin-top:5px; color:#909399; font-size:13px; }.latex-preview { padding:12px; margin:0; background:#f5f7fa; border-radius:5px; white-space:pre-wrap; }.pagination { margin-top:20px; text-align:right; }.full { width:100%; }.danger { color:#f56c6c; }.warning { color:#e6a23c; }.success { color:#67c23a; }.source-meta { margin-top:3px; color:#909399; font-size:12px; }.variant-original { display:flex; align-items:center; gap:10px; margin-bottom:10px; color:#606266; font-size:13px; }.el-tag { margin-right:4px; }.dialog-table { margin-top:16px; }.dialog-alert { margin-bottom:16px; }.history-filter { margin-top:16px; }.question-preview { margin-top:6px; color:#606266; line-height:1.45; max-height:44px; overflow:hidden; }.form-tip { color:#909399; font-size:12px; }.experiment-actions { margin-bottom:10px; }.ocr-file { margin-top:10px; display:flex; align-items:center; gap:8px; color:#606266; }
 </style>

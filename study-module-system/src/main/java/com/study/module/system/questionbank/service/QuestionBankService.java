@@ -19,6 +19,13 @@ public interface QuestionBankService extends IService<QuestionBank> {
                                                  Integer difficulty, List<Long> pointIds, Integer limit);
 
     /**
+     * 查询同知识点的跨情境候选题，优先返回与原题题型不同的题目。
+     */
+    List<QuestionBank> selectKnowledgeContextCandidates(Long userId, String grade, String subject,
+                                                        String sourceQuestionType, Integer difficulty,
+                                                        List<Long> pointIds, Integer limit);
+
+    /**
      * 查询文本相似的推荐候选题
      */
     List<QuestionBank> selectSimilarCandidates(Long userId, String grade, String subject, String questionType,

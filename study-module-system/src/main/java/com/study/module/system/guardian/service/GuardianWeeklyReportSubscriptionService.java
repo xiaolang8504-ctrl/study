@@ -5,5 +5,6 @@ import com.study.module.system.guardian.entity.GuardianWeeklyReportSubscription;
 import java.util.List;
 public interface GuardianWeeklyReportSubscriptionService extends IService<GuardianWeeklyReportSubscription> {
     void updateGuardianWeeklyReportSubscription(GuardianWeeklyReportSubscriptionReq request);
+    void unsubscribeGuardianWeeklyReport(Long studentUserId);
     List<GuardianWeeklyReportSubscription> guardianWeeklyReportSubscriptionList();
 }

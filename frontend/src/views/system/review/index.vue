@@ -27,6 +27,29 @@
       </div>
     </section>
 
+    <el-card shadow="never" class="today-action-card">
+      <div slot="header" class="card-header">
+        <div><strong>今天做什么</strong><span>按你的可用时间，从到期复习、待订正和薄弱点中组合任务</span></div>
+        <el-button type="text" icon="el-icon-refresh" @click="loadHome">重新计算</el-button>
+      </div>
+      <div v-if="home.todayActionPackageList.length" class="today-package-grid">
+        <article v-for="item in home.todayActionPackageList" :key="item.budgetMinutes" class="today-package-item">
+          <div class="package-head"><div><strong>{{ item.title }}</strong><span>预计 {{ item.estimatedMinutes || 0 }} 分钟</span></div><el-tag size="mini" type="primary">{{ item.budgetMinutes }} 分钟</el-tag></div>
+          <p>{{ item.recommendation }}</p>
+          <div v-if="item.actionList.length" class="package-action-list">
+            <div v-for="(action, index) in item.actionList" :key="`${item.budgetMinutes}-${action.actionType}`" class="package-action-item">
+              <span class="action-order">{{ index + 1 }}</span>
+              <div><strong>{{ action.title }}</strong><p>{{ action.reason }}</p><small>{{ action.estimatedMinutes }} 分钟 · {{ action.nextActionText }}</small></div>
+              <el-button type="text" @click="startTodayAction(action, item.actionList[index + 1])">去完成</el-button>
+            </div>
+          </div>
+          <el-empty v-else description="暂无可执行任务" :image-size="52" />
+          <el-button class="package-start-button" type="primary" :disabled="!item.actionList.length" @click="startTodayAction(item.actionList[0], item.actionList[1])">开始此任务包</el-button>
+        </article>
+      </div>
+      <el-empty v-else description="正在根据今日任务生成时间包" :image-size="70" />
+    </el-card>
+
     <el-row :gutter="16" class="metrics-row">
       <el-col v-for="metric in metrics" :key="metric.label" :xs="12" :sm="12" :md="6">
         <el-card shadow="hover" class="metric-card">
@@ -211,7 +234,8 @@ const emptyHome = () => ({
   scheduleList: [],
   learningPointList: [],
   subjectSettings: [],
-  selectedSubject: ''
+  selectedSubject: '',
+  todayActionPackageList: []
 })
 
 export default {
@@ -278,6 +302,33 @@ export default {
     openLearningReport() {
       this.$router.push({ path: '/system/review/report', query: this.selectedSubject
         ? { subject: this.selectedSubject } : {} })
+    },
+    startTodayAction(action, nextAction) {
+      if (!action) return
+      const subject = action.subject || this.selectedSubject || ''
+      if (action.actionType === 'REVIEW') {
+        const query = { taskLimit: action.questionCount }
+        if (subject) query.subject = subject
+        if (nextAction) {
+          query.nextActionType = nextAction.actionType
+          query.nextActionCount = nextAction.questionCount
+          query.nextActionSubject = nextAction.subject || subject
+          query.nextActionLearningPoint = nextAction.learningPoint || ''
+        }
+        this.$router.push({ path: '/system/review/today', query })
+        return
+      }
+      if (action.actionType === 'CORRECTION') {
+        const query = { status: 0 }
+        if (subject) query.subject = subject
+        this.$router.push({ path: '/system/wrongquestion', query })
+        return
+      }
+      if (action.actionType === 'WEAK_POINT_PRACTICE') {
+        const query = { learningPoint: action.learningPoint || '' }
+        if (subject) query.subject = subject
+        this.$router.push({ path: '/system/review/practice', query })
+      }
     },
     handleSubjectChange(subject) {
       this.$router.replace({ query: subject ? { subject } : {}})
@@ -355,6 +406,7 @@ export default {
 .streak { text-align: center; }
 .streak strong { display: block; font-size: 30px; }
 .streak span { font-size: 12px; opacity: .8; }
+.today-action-card { margin-bottom: 16px; border: 0; border-radius: 12px; }.today-action-card ::v-deep .el-card__header { padding: 17px 20px; border-color: #eef0f5; }.today-package-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }.today-package-item { display: flex; flex-direction: column; padding: 16px; border: 1px solid #e9ecf5; border-radius: 10px; background: linear-gradient(180deg, #fff, #f8f9ff); }.package-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }.package-head strong,.package-head span { display: block; }.package-head strong { font-size: 16px; }.package-head span { margin-top: 4px; color: #78839a; font-size: 12px; }.today-package-item > p { min-height: 38px; margin: 12px 0; color: #65718b; font-size: 12px; line-height: 1.6; }.package-action-list { flex: 1; }.package-action-item { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 8px; padding: 10px 0; border-top: 1px solid #edf0f6; }.action-order { display: grid; width: 20px; height: 20px; place-items: center; color: #5367df; border-radius: 50%; background: #edf0ff; font-size: 11px; font-weight: 700; }.package-action-item strong { display: block; color: #3c4760; font-size: 13px; }.package-action-item p { margin: 4px 0; color: #7d879a; font-size: 11px; line-height: 1.5; }.package-action-item small { color: #9ba4b5; font-size: 10px; line-height: 1.5; }.package-action-item .el-button { align-self: center; padding: 4px 0; }.package-start-button { width: 100%; margin-top: 14px; }
 .metrics-row { margin-bottom: 16px; }
 .metric-card { margin-bottom: 16px; border: 0; border-radius: 12px; }
 .metric-card ::v-deep .el-card__body { display: flex; align-items: center; gap: 14px; padding: 20px; }
@@ -421,5 +473,6 @@ export default {
   .welcome-actions { width: 100%; justify-content: space-between; }
   .welcome-panel h1 { font-size: 24px; }
   .subject-filter { align-items: flex-start; flex-direction: column; }
+  .today-package-grid { grid-template-columns: 1fr; }
 }
 </style>

@@ -2,21 +2,46 @@
   <div class="app-container">
     <el-card>
       <div slot="header">采集中心</div>
+      <div class="capture-mode">
+        <el-radio-group v-model="captureMode" size="small" @change="changeCaptureMode">
+          <el-radio-button label="SINGLE">单题快录</el-radio-button>
+          <el-radio-button label="PAPER">整卷录入</el-radio-button>
+        </el-radio-group>
+        <span>{{ captureMode === 'SINGLE' ? '上传一张题图，识别后可直接确认当前题块' : '按文件顺序上传图片或 PDF，逐页处理整张试卷' }}</span>
+      </div>
       <el-form :model="form" label-width="90px" size="small" class="capture-form">
         <el-form-item label="年级"><el-select v-model="form.grade" placeholder="请选择年级"><el-option v-for="item in gradeOptions" :key="item.key" :label="item.value" :value="item.key" /></el-select></el-form-item>
         <el-form-item label="科目"><el-select v-model="form.subject" placeholder="请选择科目"><el-option v-for="item in subjectOptions" :key="item.key" :label="item.value" :value="item.key" /></el-select></el-form-item>
         <el-form-item label="题型"><el-select v-model="form.questionType" placeholder="请选择题型"><el-option v-for="item in questionTypeOptions" :key="item.key" :label="item.value" :value="item.key" /></el-select></el-form-item>
         <el-form-item label="来源"><el-select v-model="form.source" placeholder="请选择来源"><el-option v-for="item in sourceOptions" :key="item.key" :label="item.value" :value="item.key" /></el-select></el-form-item>
         <el-form-item label="采集文件">
-          <el-upload ref="captureUpload" multiple accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf" :http-request="uploadImage" :before-upload="beforeUpload" :on-change="trackUploadFile" :on-remove="removeImage" :show-file-list="true">
-            <el-button size="small">选择图片或 PDF</el-button>
-            <span slot="tip" class="el-upload__tip">仅支持 JPG、JPEG、PNG、PDF（单文件不超过 20MB）；PDF 将自动按页渲染和识别。</span>
-          </el-upload>
-          <div class="capture-file-notice">DOC/DOCX 暂不支持：当前 OCR、分页和原图校验只覆盖图片及 PDF，文档会在文件选择器中被禁选。</div>
-          <div v-if="uploadFiles.length" class="upload-file-order"><span>识别顺序：</span><span v-for="(file, index) in uploadFiles" :key="file.uid" class="upload-file-order-item">{{ index + 1 }}. {{ file.name }} <el-button type="text" :disabled="index === 0" @click="moveUploadFile(index, -1)">↑</el-button><el-button type="text" :disabled="index === uploadFiles.length - 1" @click="moveUploadFile(index, 1)">↓</el-button></span></div>
+          <div class="capture-dropzone" :class="{ dragging }" tabindex="0" @dragover.prevent="dragging = true" @dragleave.prevent="dragging = false" @drop.prevent="handleDrop">
+            <input ref="captureFileInput" class="capture-file-input" type="file" accept=".jpg,.jpeg,.png,.pdf,.docx,image/jpeg,image/png,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" :multiple="captureMode === 'PAPER'" @change="handleFileInput">
+            <el-button size="small" @click="$refs.captureFileInput.click()">选择图片、PDF 或 DOCX</el-button>
+            <span>拖入文件，或在本页按 Ctrl/⌘ + V 粘贴截图</span>
+          </div>
+          <p class="capture-file-notice">{{ captureMode === 'SINGLE' ? '单题快录只接收一张 JPG/PNG 图片。' : '支持 JPG、JPEG、PNG、PDF、DOCX；PDF 自动分页，DOCX 进入可编辑确认页。' }}单文件不超过 20MB。</p>
+          <div class="capture-file-notice">DOCX 与图片/PDF 请分开建立任务；复杂公式、图片、表格请在确认页对照原文档补充。</div>
+          <div v-if="uploadFiles.length" class="upload-file-order">
+            <span>识别顺序：</span>
+            <div v-for="(file, index) in uploadFiles" :key="file.uid" class="upload-file-order-item">
+              <span>{{ index + 1 }}. {{ file.name }}</span>
+              <el-progress v-if="file.status === 'uploading'" :percentage="file.progress || 0" :stroke-width="6" />
+              <el-tag size="mini" :type="file.status === 'done' ? 'success' : file.status === 'error' ? 'danger' : 'info'">{{ file.status === 'done' ? '已上传' : file.status === 'error' ? '上传失败' : file.status === 'checking' ? '检查中' : '上传中' }}</el-tag>
+              <el-button v-if="file.status === 'error'" type="text" @click="retryUpload(file)">重试</el-button>
+              <el-button type="text" :disabled="index === 0 || file.status === 'uploading'" @click="moveUploadFile(index, -1)">↑</el-button>
+              <el-button type="text" :disabled="index === uploadFiles.length - 1 || file.status === 'uploading'" @click="moveUploadFile(index, 1)">↓</el-button>
+              <el-button type="text" @click="removeImage(file)">移除</el-button>
+            </div>
+          </div>
           <div v-if="Object.keys(uploadQualityWarnings).length" class="upload-quality-warnings"><p v-for="(warning, uid) in uploadQualityWarnings" :key="uid">{{ warning }}</p></div>
         </el-form-item>
-        <el-button type="primary" :loading="submitting" :disabled="uploading > 0" @click="createTask">开始识别</el-button><span v-if="uploading" class="uploading-tip">正在上传 {{ uploading }} 个文件，请稍候</span>
+        <el-form-item label="网页复制内容">
+          <el-input v-model="documentTitle" maxlength="100" placeholder="可选：文档标题" class="document-title-input" />
+          <div ref="documentContentEditor" class="document-content-editor" contenteditable="true" data-placeholder="可直接从网页或 Word 复制图文题目；表格、基础公式与内嵌图片会保留到确认预览。" @input="syncDocumentContent" @paste="handleDocumentPaste" />
+          <div class="capture-file-notice">粘贴内容请与图片/PDF 分开提交；确认前不会自动写入错题本。外链图片无法代存，请优先直接粘贴图片或上传 DOCX。</div>
+        </el-form-item>
+        <el-button type="primary" :loading="submitting" :disabled="uploading > 0 || uploadFiles.some(file => file.status === 'error')" @click="createTask">{{ captureMode === 'SINGLE' ? '识别这道题' : '开始识别整卷' }}</el-button><span v-if="uploading" class="uploading-tip">正在上传 {{ uploading }} 个文件，请稍候</span>
       </el-form>
     </el-card>
 
@@ -45,7 +70,9 @@
         <aside class="page-list">
           <div class="page-list-title">采集页面</div>
           <div v-for="page in task.pageList" :key="page.id" class="page-item">
-            <el-button size="mini" :type="page.id === currentPageId ? 'primary' : 'default'" @click="selectPage(page)">第 {{ page.pageNo }} 页</el-button>
+            <button type="button" class="page-thumb" :class="{ active: page.id === currentPageId }" @click="selectPage(page)"><img v-if="pageThumbs[page.id]" :src="pageThumbs[page.id]" :alt="`第 ${page.pageNo} 页缩略图`" loading="lazy"><span v-else>第 {{ page.pageNo }} 页</span></button>
+            <div>第 {{ page.pageNo }} 页</div>
+            <div v-if="pagePendingCount(page.id)" class="page-region-summary">待确认 {{ pagePendingCount(page.id) }}<template v-if="pageLowConfidenceCount(page.id)"> · 低置信 {{ pageLowConfidenceCount(page.id) }}</template></div>
             <el-tag v-if="page.status === 0" size="mini" type="info">排队</el-tag>
             <el-tag v-else-if="page.status === 1" size="mini" type="warning">处理中</el-tag>
             <el-tag v-else-if="page.status === 2" size="mini" type="success">完成</el-tag>
@@ -56,26 +83,68 @@
           </div>
         </aside>
         <section class="canvas-panel">
-          <div class="image-switch"><el-button size="mini" :type="!showCleaned && !compareImages ? 'primary' : 'default'" @click="showPageImage(false)">原图</el-button><el-button size="mini" :disabled="!currentPage || currentPage.cleanStatus !== 2" :type="showCleaned && !compareImages ? 'primary' : 'default'" @click="showPageImage(true)">灰度预览</el-button><el-button size="mini" :disabled="!currentPage || currentPage.cleanStatus !== 2" :type="compareImages ? 'primary' : 'default'" @click="showImageCompare">并排对照</el-button><span v-if="currentPage" class="clean-status">{{ cleanStatusText(currentPage) }}，笔迹仍会保留</span></div>
+          <div class="image-switch"><el-button size="mini" :type="!showCleaned && !showRealCleaned && !compareImages ? 'primary' : 'default'" @click="showPageImage('original')">原图</el-button><el-button size="mini" :disabled="!currentPage || currentPage.grayscaleStatus !== 2" :type="showCleaned && !compareImages ? 'primary' : 'default'" @click="showPageImage('gray')">灰度预览</el-button><el-button size="mini" :disabled="!currentPage || currentPage.cleanStatus !== 2" :type="showRealCleaned && !compareImages ? 'primary' : 'default'" @click="showPageImage('clean')">去笔迹图</el-button><el-button size="mini" :disabled="!currentPage || currentPage.cleanStatus !== 2" :type="compareImages ? 'primary' : 'default'" @click="showImageCompare">原图/清理图对照</el-button><el-button v-if="currentPage && currentPage.sourceFileId && Number(currentPage.sourceFileId) !== Number(currentPage.imageFileId)" size="mini" @click="openSourceDocument">打开原 DOCX</el-button><el-button v-if="currentPage && currentPage.cleanStatus !== 1 && currentPage.cleanStatus !== 2" size="mini" type="primary" plain @click="generateCleanImage">生成去笔迹图</el-button><el-button size="mini" :disabled="!currentPage" :loading="manualCleanUploading" @click="selectManualCleanImage">上传人工遮罩图</el-button><input ref="manualCleanFileInput" class="manual-clean-input" type="file" accept="image/png,image/jpeg,image/webp,image/bmp" @change="uploadManualCleanImage"><el-button v-if="currentPage && currentPage.cleanStatus === 2" size="mini" @click="revertCleanImage">整页回退原图</el-button><span v-if="currentPage" class="clean-status">{{ cleanStatusText(currentPage) }} · {{ grayscaleStatusText(currentPage) }}</span></div>
+          <p v-if="currentPage" class="capture-file-notice">深黑笔迹与印刷黑字无法安全自动区分时，请在任意图片工具中遮罩后上传整页图；系统始终保留原图，并可整页回退。</p>
           <el-alert v-if="currentPage && currentPage.cleanStatus === 4" :title="currentPage.cleanFailReason" type="warning" :closable="false" />
-          <div v-if="compareImages && originalPageUrl && cleanedPageUrl" class="image-compare"><figure><figcaption>原图</figcaption><img :src="originalPageUrl"></figure><figure><figcaption>灰度预览（保留笔迹）</figcaption><img :src="cleanedPageUrl"></figure></div>
+          <div v-if="compareImages && originalPageUrl && cleanedPageUrl" class="image-compare"><figure><figcaption>原图</figcaption><img :src="originalPageUrl"></figure><figure><figcaption>去笔迹图（{{ currentPage.cleanProvider || '本地' }} / {{ currentPage.cleanAlgorithmVersion || '-' }}）</figcaption><img :src="cleanedPageUrl"></figure></div>
           <div v-else-if="currentPageUrl" ref="canvas" class="image-canvas" :class="{ 'create-region-mode': creatingRegion }" @mousedown="startCreateRegion"><img :src="currentPageUrl" @load="imageLoaded = true"><div v-for="region in currentPageRegions" :key="region.id" class="region-box" :class="{ active: activeRegionId === region.id, 'low-confidence': isLowConfidence(region), skipped: region.status === 2 }" :style="regionStyle(region)" @mousedown.stop.prevent="startDrag($event, region, 'drag')"><span class="region-label">题块 {{ region.regionNo }}</span><span v-if="region.status === 0" class="resize-handle" @mousedown.stop.prevent="startDrag($event, region, 'resize')" /></div><div v-if="draftRegion" class="region-box active manual-region" :style="regionStyle(draftRegion)"><span class="region-label">新题块</span></div></div>
           <el-empty v-else :description="currentPage && currentPage.status === 4 ? currentPage.failReason : '正在加载原图'" :image-size="70" />
         </section>
-        <aside class="region-help"><b>切题操作</b><p>拖动题块移动位置，右下角拖动调整大小；松开鼠标自动保存。</p><el-button size="mini" :type="creatingRegion ? 'primary' : 'default'" @click="toggleCreateRegion">{{ creatingRegion ? '取消新增题块' : '框选新增题块' }}</el-button><el-button size="mini" :disabled="!activeRegionId" @click="splitRegion">按比例拆分当前题块</el-button><el-button size="mini" :disabled="!activeRegionId" @click="deleteRegion">跳过当前题块</el-button><el-button size="mini" :disabled="selected.length < 2" @click="mergeRegions">合并已勾选题块</el-button></aside>
+        <aside class="region-editor">
+          <b>题块操作与字段</b>
+          <p>拖动题块调整位置；快捷键 N/Shift+N 下/上一低置信题、A 新增题框、X 拆分、S 跳过、Ctrl/⌘ + Enter 确认当前题。</p>
+          <el-button size="mini" :type="creatingRegion ? 'primary' : 'default'" @click="toggleCreateRegion">{{ creatingRegion ? '取消新增题块' : '框选新增题块' }}</el-button>
+          <el-button size="mini" :disabled="!activeRegionId" @click="splitRegion">拆分 X</el-button>
+          <el-button size="mini" :disabled="!activeRegionId" @click="deleteRegion">跳过</el-button>
+          <el-button size="mini" :disabled="selected.length < 2" @click="mergeRegions">合并已勾选</el-button>
+          <template v-if="activeRegion">
+            <div class="active-region-title">第 {{ pageNumber(activeRegion.pageId) }} 页 · 题块 {{ activeRegion.regionNo }}</div>
+            <el-form label-position="top" size="mini" :model="activeRegion">
+              <el-form-item label="题目标题"><el-input v-model="activeRegion.questionTitle" :disabled="activeRegion.status !== 0" @blur="saveRegion(activeRegion)" /></el-form-item>
+              <el-form-item label="题干"><el-input v-model="activeRegion.questionContent" type="textarea" :rows="3" :disabled="activeRegion.status !== 0" @blur="saveRegion(activeRegion)" /></el-form-item>
+              <el-form-item label="我的错答"><el-input v-model="activeRegion.wrongAnswer" :disabled="activeRegion.status !== 0" @blur="saveRegion(activeRegion)" /></el-form-item>
+              <el-form-item label="参考答案"><el-input v-model="activeRegion.correctAnswer" :disabled="activeRegion.status !== 0" @blur="saveRegion(activeRegion)" /></el-form-item>
+              <el-form-item label="年级"><el-select v-model="activeRegion.grade" clearable :disabled="activeRegion.status !== 0" @change="saveRegion(activeRegion)"><el-option v-for="item in gradeOptions" :key="item.key" :label="item.value" :value="item.key" /></el-select></el-form-item>
+              <el-form-item label="科目"><el-select v-model="activeRegion.subject" clearable :disabled="activeRegion.status !== 0" @change="saveRegion(activeRegion)"><el-option v-for="item in subjectOptions" :key="item.key" :label="item.value" :value="item.key" /></el-select></el-form-item>
+              <el-form-item label="题型"><el-select v-model="activeRegion.questionType" clearable :disabled="activeRegion.status !== 0" @change="saveRegion(activeRegion)"><el-option v-for="item in questionTypeOptions" :key="item.key" :label="item.value" :value="item.key" /></el-select></el-form-item>
+              <el-form-item label="来源"><el-select v-model="activeRegion.source" clearable :disabled="activeRegion.status !== 0" @change="saveRegion(activeRegion)"><el-option v-for="item in sourceOptions" :key="item.key" :label="item.value" :value="item.key" /></el-select></el-form-item>
+              <el-form-item label="知识点"><el-input v-model="activeRegion.learningPoint" :disabled="activeRegion.status !== 0" @blur="saveRegion(activeRegion)" /></el-form-item>
+              <el-form-item label="题块用图"><el-radio-group v-model="activeRegion.cleanImageMode" :disabled="activeRegion.status !== 0" @change="saveRegion(activeRegion)"><el-radio label="ORIGINAL">原图</el-radio><el-radio label="CLEANED" :disabled="!currentPage || currentPage.cleanStatus !== 2">去笔迹图</el-radio></el-radio-group><span class="field-confidence">可按题块局部恢复原图</span></el-form-item>
+            </el-form>
+            <el-button v-if="activeRegion.status === 0" size="mini" type="primary" :loading="confirming" @click="confirmRegions([activeRegion])">确认当前题块</el-button>
+            <el-button size="mini" @click="editRegion(activeRegion)">更多字段</el-button>
+          </template>
+          <el-empty v-else description="点击题框或列表中的定位，开始校正" :image-size="55" />
+        </aside>
       </div>
 
-      <div class="region-filter"><el-checkbox v-model="lowConfidenceOnly">仅低置信度（&lt; {{ confidenceThreshold }}%）</el-checkbox><el-checkbox v-model="showSkipped">显示已跳过题块</el-checkbox><span>待确认 {{ pendingCount }} 个，低置信度 {{ lowConfidenceCount }} 个</span></div>
-      <el-table :data="displayRegions" @selection-change="changeSelection" border>
+      <div v-if="task.status === 2" class="batch-meta">
+        <strong>批量设置归类</strong>
+        <el-radio-group v-model="batchScope" size="mini">
+          <el-radio-button label="selected">已勾选 {{ selected.length }} 个</el-radio-button>
+          <el-radio-button label="page">当前页 {{ pagePendingCount(currentPageId) }} 个</el-radio-button>
+          <el-radio-button label="low">低置信 {{ lowConfidenceCount }} 个</el-radio-button>
+          <el-radio-button label="all">全部待确认 {{ pendingCount }} 个</el-radio-button>
+        </el-radio-group>
+        <el-select v-model="batchForm.grade" clearable size="mini" placeholder="年级（不改可留空）"><el-option v-for="item in gradeOptions" :key="item.key" :label="item.value" :value="item.key" /></el-select>
+        <el-select v-model="batchForm.subject" clearable size="mini" placeholder="科目"><el-option v-for="item in subjectOptions" :key="item.key" :label="item.value" :value="item.key" /></el-select>
+        <el-select v-model="batchForm.questionType" clearable size="mini" placeholder="题型"><el-option v-for="item in questionTypeOptions" :key="item.key" :label="item.value" :value="item.key" /></el-select>
+        <el-select v-model="batchForm.source" clearable size="mini" placeholder="来源"><el-option v-for="item in sourceOptions" :key="item.key" :label="item.value" :value="item.key" /></el-select>
+        <el-input v-model.trim="batchForm.learningPoint" size="mini" placeholder="知识点（可选）" />
+        <el-button size="mini" type="primary" :loading="batchSaving" @click="saveBatchMetadata">应用到题块</el-button>
+      </div>
+      <div class="region-filter"><el-checkbox v-model="lowConfidenceOnly">仅低置信度（&lt; {{ confidenceThreshold }}%）</el-checkbox><el-checkbox v-model="showSkipped">显示已跳过题块</el-checkbox><span>待确认 {{ pendingCount }} 个，低置信度 {{ lowConfidenceCount }} 个</span><el-button size="mini" :disabled="!lowConfidenceCount" @click="previousLowConfidence">上一条 Shift+N</el-button><el-button size="mini" :disabled="!lowConfidenceCount" @click="nextLowConfidence">下一条 N</el-button><el-button size="mini" :disabled="!pagePendingCount(currentPageId)" @click="selectCurrentPageRegions">勾选本页</el-button><el-button size="mini" :disabled="!lowConfidenceCount" @click="selectLowConfidenceRegions">勾选低置信</el-button></div>
+      <el-table ref="regionTable" :data="displayRegions" @selection-change="changeSelection" border>
         <el-table-column type="selection" width="50" :selectable="row => row.status === 0" />
         <el-table-column prop="regionNo" label="题块" width="70" />
+        <el-table-column label="页码" width="70"><template slot-scope="scope">{{ pageNumber(scope.row.pageId) }}</template></el-table-column>
         <el-table-column prop="confidence" label="置信度" width="95"><template slot-scope="scope"><el-tag :type="isLowConfidence(scope.row) ? 'warning' : 'success'">{{ scope.row.confidence }}%</el-tag></template></el-table-column>
         <el-table-column label="状态" width="100"><template slot-scope="scope"><el-tag v-if="scope.row.status === 2" type="info">已跳过</el-tag><el-tag v-else-if="scope.row.manuallyCorrected" type="primary">已校正</el-tag><el-tag v-else type="warning">待确认</el-tag></template></el-table-column>
         <el-table-column label="题干" min-width="240"><template slot-scope="scope"><el-input v-model="scope.row.questionContent" :class="{ 'low-confidence-input': isFieldLowConfidence(scope.row.questionContentConfidence) }" :disabled="scope.row.status !== 0" type="textarea" :rows="2" @blur="saveRegion(scope.row)" /></template></el-table-column>
         <el-table-column label="答案" min-width="180"><template slot-scope="scope"><el-input v-model="scope.row.correctAnswer" :class="{ 'low-confidence-input': isFieldLowConfidence(scope.row.correctAnswerConfidence) }" :disabled="scope.row.status !== 0" type="textarea" :rows="2" @blur="saveRegion(scope.row)" /></template></el-table-column>
         <el-table-column label="操作" width="150"><template slot-scope="scope"><el-button v-if="scope.row.status === 2" type="text" @click="restoreRegion(scope.row)">恢复</el-button><template v-else-if="scope.row.status === 0"><el-button type="text" @click="focusRegion(scope.row)">定位</el-button><el-button type="text" @click="editRegion(scope.row)">编辑</el-button></template><el-link v-else-if="scope.row.wrongQuestionId" type="primary" @click="openWrongQuestion(scope.row)">查看错题</el-link></template></el-table-column>
       </el-table>
-      <el-button v-if="task.status === 2" type="primary" :disabled="!selected.length" @click="confirm">确认并创建错题</el-button>
+      <el-button v-if="task.status === 2" type="primary" :loading="confirming" :disabled="!selected.length" @click="confirm">确认并创建错题</el-button>
     </el-card>
 
     <el-dialog title="校正题块内容与归类" :visible.sync="regionEditorOpen" width="720px" append-to-body>
@@ -89,6 +158,7 @@
         <el-form-item label="题目解析"><el-input v-model="regionForm.analysis" type="textarea" :rows="3" /></el-form-item>
         <el-form-item label="知识点"><el-input v-model="regionForm.learningPoint" placeholder="可留空，沿用任务默认值" /></el-form-item>
         <el-form-item label="错因标签"><el-input v-model="regionForm.errorLabels" placeholder="多个标签使用逗号分隔" /></el-form-item>
+        <el-form-item label="题块用图"><el-radio-group v-model="regionForm.cleanImageMode"><el-radio label="ORIGINAL">原图</el-radio><el-radio label="CLEANED" :disabled="!currentPage || currentPage.cleanStatus !== 2">去笔迹图</el-radio></el-radio-group></el-form-item>
       </el-form>
       <div slot="footer"><el-button @click="regionEditorOpen = false">取消</el-button><el-button type="primary" @click="saveRegionEditor">保存校正</el-button></div>
     </el-dialog>
@@ -96,7 +166,7 @@
 </template>
 
 <script>
-import { createQuestionCaptureTask, questionCaptureTaskDetail, retryQuestionCaptureTask, retryQuestionCapturePage, saveQuestionCapturePageAsImage, questionCaptureDuplicateList, confirmQuestionCapture, updateQuestionCaptureRegion, createQuestionCaptureRegion, mergeQuestionCaptureRegion, splitQuestionCaptureRegionByRatio, restoreQuestionCaptureRegionSnapshot, deleteQuestionCaptureRegion, restoreQuestionCaptureRegion, questionCaptureTaskPageList } from '@/api/system/wrongQuestion'
+import { createQuestionCaptureTask, questionCaptureTaskDetail, retryQuestionCaptureTask, retryQuestionCapturePage, saveQuestionCapturePageAsImage, generateQuestionCaptureCleanImage, revertQuestionCaptureCleanImage, applyQuestionCaptureManualCleanImage, questionCaptureDuplicateList, confirmQuestionCapture, updateQuestionCaptureRegion, batchUpdateQuestionCaptureRegion, createQuestionCaptureRegion, mergeQuestionCaptureRegion, splitQuestionCaptureRegionByRatio, restoreQuestionCaptureRegionSnapshot, deleteQuestionCaptureRegion, restoreQuestionCaptureRegion, questionCaptureTaskPageList } from '@/api/system/wrongQuestion'
 import { filePolicy, uploadFile, downloadUrl } from '@/api/system/file'
 import { dictDataOptions } from '@/api/system/dict'
 
@@ -107,10 +177,11 @@ const CAPTURE_DRAFT_TTL_MS = 24 * 60 * 60 * 1000
 export default {
   name: 'QuestionCapture',
   data() {
-    return { form: { grade: '', subject: '', questionType: '', source: '' }, imageFileIds: [], uploadFiles: [], task: null, selected: [], submitting: false, uploading: 0, uploadQualityWarnings: {}, timer: null, currentPageId: null, currentPageUrl: '', originalPageUrl: '', cleanedPageUrl: '', compareImages: false, activeRegionId: null, imageLoaded: false, pointer: null, creatingRegion: false, draftRegion: null, showCleaned: false, lowConfidenceOnly: false, showSkipped: false, confidenceThreshold: 90, historyStatus: null, history: { list: [], current: 1, pageSize: 10, total: 0 }, gradeOptions: [], subjectOptions: [], questionTypeOptions: [], sourceOptions: [], regionEditorOpen: false, regionForm: {}, undoStack: [], redoStack: [] }
+    return { captureMode: 'PAPER', dragging: false, form: { grade: '', subject: '', questionType: '', source: '' }, imageFileIds: [], uploadFiles: [], documentTitle: '', documentContent: '', task: null, activeTaskId: null, selected: [], submitting: false, confirming: false, uploading: 0, manualCleanUploading: false, uploadQualityWarnings: {}, timer: null, currentPageId: null, currentPageUrl: '', pageThumbs: {}, pageThumbLoading: {}, originalPageUrl: '', cleanedPageUrl: '', compareImages: false, activeRegionId: null, imageLoaded: false, pointer: null, creatingRegion: false, draftRegion: null, showCleaned: false, showRealCleaned: false, lowConfidenceOnly: false, showSkipped: false, confidenceThreshold: 90, batchScope: 'selected', batchForm: { grade: '', subject: '', questionType: '', source: '', learningPoint: '' }, batchSaving: false, historyStatus: null, history: { list: [], current: 1, pageSize: 10, total: 0 }, gradeOptions: [], subjectOptions: [], questionTypeOptions: [], sourceOptions: [], regionEditorOpen: false, regionForm: {}, undoStack: [], redoStack: [] }
   },
   computed: {
     currentPage() { return this.task && this.currentPageId ? this.task.pageList.find(item => item.id === this.currentPageId) : null },
+    activeRegion() { return this.task && this.activeRegionId ? this.task.regionList.find(item => item.id === this.activeRegionId) : null },
     currentPageRegions() { return this.displayRegions.filter(item => item.pageId === this.currentPageId) },
     displayRegions() { if (!this.task) return []; return this.task.regionList.filter(item => (this.showSkipped || item.status !== 2) && (!this.lowConfidenceOnly || this.isLowConfidence(item))) },
     pendingCount() { return this.task ? this.task.regionList.filter(item => item.status === 0).length : 0 },
@@ -120,40 +191,154 @@ export default {
     estimatedRemainingText() { if (!this.task || ![0, 1].includes(Number(this.task.status))) return ''; const seconds = Math.max(0, Number(this.task.processingPageCount || 0) * 15); if (!seconds) return '正在分配识别任务'; return `预计剩余约 ${seconds < 60 ? seconds + ' 秒' : Math.ceil(seconds / 60) + ' 分钟'}（按 15 秒/页估算）` }
   },
   created() {
+    window.addEventListener('paste', this.handlePaste)
+    window.addEventListener('keydown', this.handleShortcut)
     this.loadDictOptions()
     this.loadHistory(1)
     const taskId = Number(this.$route.query.taskId)
     if (taskId > 0) this.openTask(taskId)
     else this.restoreCaptureDraft()
   },
-  beforeDestroy() { this.persistCaptureDraft(); clearTimeout(this.timer); this.timer = null; this.stopPointer() },
+  beforeDestroy() { this.persistCaptureDraft(); clearTimeout(this.timer); this.timer = null; this.stopPointer(); window.removeEventListener('paste', this.handlePaste); window.removeEventListener('keydown', this.handleShortcut) },
   methods: {
     loadDictOptions() { Promise.all([dictDataOptions({ dictType: DICT_TYPES.grade }), dictDataOptions({ dictType: DICT_TYPES.subject }), dictDataOptions({ dictType: DICT_TYPES.questionType }), dictDataOptions({ dictType: DICT_TYPES.source })]).then(([gradeOptions, subjectOptions, questionTypeOptions, sourceOptions]) => { this.gradeOptions = gradeOptions || []; this.subjectOptions = subjectOptions || []; this.questionTypeOptions = questionTypeOptions || []; this.sourceOptions = sourceOptions || [] }).catch(() => this.$message.warning('采集元数据字典加载失败，请刷新后重试')) },
-    beforeUpload(file) { const extension = String(file.name || '').split('.').pop().toLowerCase(); if (!['jpg', 'jpeg', 'png', 'pdf'].includes(extension)) { this.$message.error('仅支持 JPG、JPEG、PNG、PDF 文件'); return false } if (file.size > 20 * 1024 * 1024) { this.$message.error('单个文件不能超过 20MB'); return false } if (extension === 'pdf') return true; return this.inspectImageQuality(file) },
-    inspectImageQuality(file) { return new Promise(resolve => { const reader = new FileReader(); reader.onload = event => { const image = new Image(); image.onload = () => { if (image.width < 600 || image.height < 600) { this.$message.error(`${file.name} 分辨率过低，请重新拍摄或上传原图`); return resolve(false) } const canvas = document.createElement('canvas'); const scale = Math.min(1, 480 / Math.max(image.width, image.height)); canvas.width = Math.max(1, Math.round(image.width * scale)); canvas.height = Math.max(1, Math.round(image.height * scale)); const context = canvas.getContext('2d'); context.drawImage(image, 0, 0, canvas.width, canvas.height); const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data; let sum = 0; let squareSum = 0; for (let index = 0; index < pixels.length; index += 4) { const gray = pixels[index] * 0.299 + pixels[index + 1] * 0.587 + pixels[index + 2] * 0.114; sum += gray; squareSum += gray * gray } const count = pixels.length / 4; const average = sum / count; const deviation = Math.sqrt(Math.max(0, squareSum / count - average * average)); const warnings = []; if (average < 55) warnings.push('图片偏暗'); if (average > 230) warnings.push('图片过曝'); if (deviation < 20) warnings.push('对比度偏低，可能存在反光或模糊'); if (warnings.length) { this.$set(this.uploadQualityWarnings, file.uid, `${file.name}：${warnings.join('；')}，建议重拍后再识别`); this.$message.warning(`${file.name} 可能影响识别，请查看上传提示`) } resolve(true) }; image.onerror = () => resolve(true); image.src = event.target.result }; reader.onerror = () => resolve(true); reader.readAsDataURL(file) }) },
-    trackUploadFile(file) { if (!this.uploadFiles.some(item => item.uid === file.uid)) this.uploadFiles.push(file) },
-    moveUploadFile(index, offset) { const target = index + offset; if (target < 0 || target >= this.uploadFiles.length) return; const moved = this.uploadFiles.splice(index, 1)[0]; this.uploadFiles.splice(target, 0, moved) },
-    uploadImage(option) { this.uploading += 1; filePolicy({ uploadType: 'wrongQuestion' }).then(policy => { const formData = new FormData(); formData.append('file', option.file); formData.append('signature', policy.signature); return uploadFile(formData) }).then(file => { option.file.captureFileId = file.id; if (!this.imageFileIds.includes(file.id)) this.imageFileIds.push(file.id); this.persistCaptureDraft(); option.onSuccess(file) }).catch(option.onError).finally(() => { this.uploading = Math.max(0, this.uploading - 1) }) },
-    removeImage(file) { const fileId = file && file.captureFileId; if (fileId) this.imageFileIds = this.imageFileIds.filter(id => id !== fileId); this.uploadFiles = this.uploadFiles.filter(item => item.uid !== file.uid); if (file && file.uid) this.$delete(this.uploadQualityWarnings, file.uid); this.persistCaptureDraft() },
-    createTask() { if (!this.form.grade || !this.form.subject || !this.form.questionType || !this.form.source) return this.$message.warning('请选择年级、科目、题型和来源'); if (this.uploading > 0) return this.$message.warning('文件仍在上传，请稍候'); const orderedFileIds = this.uploadFiles.map(file => file.captureFileId).filter(Boolean); const sourceFileIds = orderedFileIds.length ? orderedFileIds : this.imageFileIds; if (!sourceFileIds.length) return this.$message.warning('请先上传至少一张图片或 PDF'); this.submitting = true; const clientRequestId = `capture-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`; createQuestionCaptureTask(Object.assign({}, this.form, { imageFileIds: sourceFileIds, clientRequestId })).then(id => { this.imageFileIds = []; this.uploadFiles = []; this.uploadQualityWarnings = {}; this.$refs.captureUpload.clearFiles(); this.persistCaptureDraft(id); this.openTask(id); this.loadHistory(1) }).finally(() => { this.submitting = false }) },
-    loadHistory(current) { questionCaptureTaskPageList({ current, pageSize: this.history.pageSize, status: this.historyStatus }).then(data => { this.history = data }) },
+    changeCaptureMode(mode) { if (mode === 'SINGLE' && this.uploadFiles.length > 1) { this.captureMode = 'PAPER'; this.$message.warning('请先将文件减少到一张，再切换单题快录'); return } if (mode === 'SINGLE' && this.uploadFiles.some(item => item.name.toLowerCase().endsWith('.pdf'))) { this.captureMode = 'PAPER'; this.$message.warning('单题快录只支持图片，请移除 PDF 后重试'); return } this.persistCaptureDraft() },
+    handleFileInput(event) { this.enqueueFiles(Array.from(event.target.files || [])); event.target.value = '' },
+    handleDrop(event) { this.dragging = false; this.enqueueFiles(Array.from(event.dataTransfer.files || [])) },
+    handlePaste(event) {
+      const target = event.target
+      if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return
+      const images = Array.from((event.clipboardData && event.clipboardData.items) || []).filter(item => item.kind === 'file' && item.type.startsWith('image/'))
+      if (!images.length) return
+      event.preventDefault()
+      const files = images.map((item, index) => { const blob = item.getAsFile(); const extension = item.type === 'image/jpeg' ? 'jpg' : 'png'; return new File([blob], `截图-${Date.now()}-${index + 1}.${extension}`, { type: item.type }) })
+      this.enqueueFiles(files)
+    },
+    async enqueueFiles(files) {
+      if (!files.length) return
+      if (this.captureMode === 'SINGLE' && (files.length !== 1 || this.uploadFiles.length)) { this.$message.warning('单题快录一次只接收一张图片，请先移除已有文件'); return }
+      const fingerprints = new Set(this.uploadFiles.map(item => item.fingerprint).filter(Boolean))
+      let duplicateCount = 0
+      for (const file of files) {
+        const fingerprint = this.fileFingerprint(file)
+        if (fingerprints.has(fingerprint)) { duplicateCount += 1; continue }
+        fingerprints.add(fingerprint)
+        const entry = { uid: `capture-${Date.now()}-${Math.random().toString(36).slice(2)}`, name: file.name, file, fingerprint, status: 'checking', progress: 0, captureFileId: null }
+        if (!(await this.beforeUpload(file, entry.uid))) continue
+        this.uploadFiles.push(entry)
+        this.uploadCaptureEntry(entry)
+      }
+      if (duplicateCount) this.$message.warning(`已忽略 ${duplicateCount} 个重复文件`)
+    },
+    fileFingerprint(file) { return `${String(file.name || '').toLowerCase()}::${Number(file.size || 0)}::${Number(file.lastModified || 0)}` },
+    beforeUpload(file, uid) { const extension = String(file.name || '').split('.').pop().toLowerCase(); if (!['jpg', 'jpeg', 'png', 'pdf', 'docx'].includes(extension)) { this.$message.error('仅支持 JPG、JPEG、PNG、PDF、DOCX 文件'); return false } if (this.captureMode === 'SINGLE' && ['pdf', 'docx'].includes(extension)) { this.$message.error('单题快录只支持图片'); return false } if (file.size > 20 * 1024 * 1024) { this.$message.error('单个文件不能超过 20MB'); return false } if (['pdf', 'docx'].includes(extension)) return true; return this.inspectImageQuality(file, uid) },
+    inspectImageQuality(file, uid) { return new Promise(resolve => { const reader = new FileReader(); reader.onload = event => { const image = new Image(); image.onload = () => { const minimum = this.captureMode === 'SINGLE' ? 200 : 600; if (image.width < minimum || image.height < minimum) { this.$message.error(`${file.name} 分辨率过低，请上传更清晰的图片`); return resolve(false) } const canvas = document.createElement('canvas'); const scale = Math.min(1, 480 / Math.max(image.width, image.height)); canvas.width = Math.max(1, Math.round(image.width * scale)); canvas.height = Math.max(1, Math.round(image.height * scale)); const context = canvas.getContext('2d'); context.drawImage(image, 0, 0, canvas.width, canvas.height); const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data; let sum = 0; let squareSum = 0; for (let index = 0; index < pixels.length; index += 4) { const gray = pixels[index] * 0.299 + pixels[index + 1] * 0.587 + pixels[index + 2] * 0.114; sum += gray; squareSum += gray * gray } const count = pixels.length / 4; const average = sum / count; const deviation = Math.sqrt(Math.max(0, squareSum / count - average * average)); const warnings = []; if (image.width < 600 || image.height < 600) warnings.push('单题截图较小'); if (average < 55) warnings.push('图片偏暗'); if (average > 230) warnings.push('图片过曝'); if (deviation < 20) warnings.push('对比度偏低，可能存在反光或模糊'); if (warnings.length) { this.$set(this.uploadQualityWarnings, uid, `${file.name}：${warnings.join('；')}，可能影响识别`); this.$message.warning(`${file.name} 可能影响识别，请查看上传提示`) } resolve(true) }; image.onerror = () => resolve(true); image.src = event.target.result }; reader.onerror = () => resolve(true); reader.readAsDataURL(file) }) },
+    moveUploadFile(index, offset) { const target = index + offset; if (target < 0 || target >= this.uploadFiles.length) return; const moved = this.uploadFiles.splice(index, 1)[0]; this.uploadFiles.splice(target, 0, moved); this.persistCaptureDraft() },
+    uploadCaptureEntry(entry) {
+      if (!entry.file) return
+      entry.status = 'uploading'
+      entry.progress = 0
+      this.uploading += 1
+      filePolicy({ uploadType: 'wrongQuestion' }).then(policy => {
+        const formData = new FormData()
+        formData.append('file', entry.file)
+        formData.append('signature', policy.signature)
+        return uploadFile(formData, event => {
+          if (!this.uploadFiles.includes(entry) || !event.total) return
+          entry.progress = Math.min(99, Math.round(event.loaded * 100 / event.total))
+        })
+      }).then(file => {
+        if (!this.uploadFiles.includes(entry)) return
+        entry.captureFileId = file.id
+        entry.progress = 100
+        entry.status = 'done'
+        if (!this.imageFileIds.includes(file.id)) this.imageFileIds.push(file.id)
+        this.persistCaptureDraft()
+      }).catch(() => {
+        if (this.uploadFiles.includes(entry)) {
+          entry.status = 'error'
+          entry.progress = 0
+          this.$message.error(`${entry.name} 上传失败，可点击重试`)
+        }
+      }).finally(() => { this.uploading = Math.max(0, this.uploading - 1) })
+    },
+    retryUpload(entry) { if (entry.status !== 'error') return; this.uploadCaptureEntry(entry) },
+    removeImage(entry) { this.uploadFiles = this.uploadFiles.filter(item => item.uid !== entry.uid); if (entry.captureFileId) this.imageFileIds = this.imageFileIds.filter(id => id !== entry.captureFileId); this.$delete(this.uploadQualityWarnings, entry.uid); this.persistCaptureDraft() },
+    syncDocumentContent() { this.documentContent = this.$refs.documentContentEditor ? this.$refs.documentContentEditor.innerHTML : '' },
+    handleDocumentPaste(event) { const html = event.clipboardData && event.clipboardData.getData('text/html'); if (!html) return; event.preventDefault(); document.execCommand('insertHTML', false, html); this.$nextTick(this.syncDocumentContent) },
+    createTask() { if (!this.form.grade || !this.form.subject || !this.form.questionType || !this.form.source) return this.$message.warning('请选择年级、科目、题型和来源'); if (this.uploading > 0) return this.$message.warning('文件仍在上传，请稍候'); if (this.uploadFiles.some(file => file.status !== 'done')) return this.$message.warning('请重试上传失败的文件'); const sourceFileIds = this.uploadFiles.map(file => file.captureFileId).filter(Boolean); const hasDocument = Boolean(this.documentContent && this.documentContent.trim()); if (!sourceFileIds.length && !hasDocument) return this.$message.warning('请上传文件或粘贴文档内容'); const hasDocx = this.uploadFiles.some(file => String(file.name || '').toLowerCase().endsWith('.docx')); if ((hasDocx || hasDocument) && (hasDocument ? sourceFileIds.length > 0 : this.uploadFiles.some(file => !String(file.name || '').toLowerCase().endsWith('.docx')))) return this.$message.warning('DOCX/网页粘贴请单独建立文档导入任务'); this.submitting = true; const clientRequestId = `capture-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`; createQuestionCaptureTask(Object.assign({}, this.form, { imageFileIds: sourceFileIds, documentContent: hasDocument ? this.documentContent : null, documentTitle: this.documentTitle || null, clientRequestId })).then(id => { this.imageFileIds = []; this.uploadFiles = []; this.uploadQualityWarnings = {}; this.documentContent = ''; if (this.$refs.documentContentEditor) this.$refs.documentContentEditor.innerHTML = ''; this.documentTitle = ''; this.openTask(id); this.loadHistory(1) }).finally(() => { this.submitting = false }) },
+    loadHistory(current) { return questionCaptureTaskPageList({ current, pageSize: this.history.pageSize, status: this.historyStatus }).then(data => { this.history = data }) },
     openHistoryTask(row) { this.openTask(row.id) },
-    openTask(taskId) { this.currentPageId = null; this.task = null; this.undoStack = []; this.redoStack = []; this.persistCaptureDraft(taskId); this.loadTask(taskId) },
-    loadTask(taskId) { const id = taskId || (this.task && this.task.id); if (!id) return; clearTimeout(this.timer); this.timer = null; questionCaptureTaskDetail({ id }).then(data => { this.task = data; if (!this.currentPageId && data.pageList.length) this.selectPage(data.pageList[0]); const status = Number(data.status); if (status === 3) this.clearCaptureDraft(); else this.persistCaptureDraft(id); if (status === 0 || status === 1) this.timer = setTimeout(() => this.loadTask(id), 1500) }).catch(() => { this.timer = null }) },
-    persistCaptureDraft(taskId) { const id = taskId || (this.task && this.task.id); const fileIds = this.uploadFiles.map(file => file.captureFileId).filter(Boolean); const imageFileIds = fileIds.length ? fileIds : this.imageFileIds; if (!id && !imageFileIds.length) return; localStorage.setItem(CAPTURE_DRAFT_STORAGE_KEY, JSON.stringify({ savedAt: Date.now(), taskId: id || null, form: this.form, imageFileIds, fileNames: this.uploadFiles.map(file => file.name || '已上传文件') })) },
+    openTask(taskId) { this.activeTaskId = taskId; this.currentPageId = null; this.activeRegionId = null; this.currentPageUrl = ''; this.pageThumbs = {}; this.pageThumbLoading = {}; this.task = null; this.undoStack = []; this.redoStack = []; this.persistCaptureDraft(taskId); this.loadTask(taskId) },
+    loadTask(taskId) { const id = taskId || this.activeTaskId; if (!id) return Promise.resolve(); clearTimeout(this.timer); this.timer = null; return questionCaptureTaskDetail({ id }).then(data => { if (this.activeTaskId !== id) return; (data.regionList || []).forEach(region => { if (!region.cleanImageMode) region.cleanImageMode = 'ORIGINAL' }); this.task = data; this.loadPageThumbnails(data.pageList || []); if (!this.currentPageId && data.pageList.length) this.selectPage(data.pageList[0]); if (this.activeRegionId && !data.regionList.some(item => item.id === this.activeRegionId && item.status === 0)) this.activeRegionId = null; if (!this.activeRegionId && Number(data.status) === 2) { const first = data.regionList.find(item => item.status === 0); if (first) this.focusRegion(first) } const status = Number(data.status); if (status === 3) this.clearCaptureDraft(); else this.persistCaptureDraft(id); if (status === 0 || status === 1) this.timer = setTimeout(() => this.loadTask(id), 1500) }).catch(() => { this.timer = null }) },
+    loadPageThumbnails(pages) { pages.forEach(page => { if (!page.imageFileId || !page.sourcePageNo || this.pageThumbs[page.id] || this.pageThumbLoading[page.id]) return; this.$set(this.pageThumbLoading, page.id, true); downloadUrl({ fileId: page.imageFileId, uploadType: 'wrongQuestion' }).then(url => { if (this.activeTaskId && this.task && this.task.pageList.some(item => item.id === page.id)) this.$set(this.pageThumbs, page.id, url) }).catch(() => {}).finally(() => { this.$set(this.pageThumbLoading, page.id, false) }) }) },
+    persistCaptureDraft(taskId) { const id = taskId || (this.uploadFiles.length ? null : this.task && this.task.status !== 3 ? this.task.id : null); const files = this.uploadFiles.filter(file => file.captureFileId); const imageFileIds = files.map(file => file.captureFileId); if (!id && !imageFileIds.length) { this.clearCaptureDraft(); return } localStorage.setItem(CAPTURE_DRAFT_STORAGE_KEY, JSON.stringify({ savedAt: Date.now(), taskId: id || null, captureMode: this.captureMode, form: this.form, imageFileIds, fileNames: files.map(file => file.name || '已上传文件') })) },
     clearCaptureDraft() { localStorage.removeItem(CAPTURE_DRAFT_STORAGE_KEY) },
-    restoreCaptureDraft() { let draft; try { draft = JSON.parse(localStorage.getItem(CAPTURE_DRAFT_STORAGE_KEY) || 'null') } catch (error) { this.clearCaptureDraft(); return } if (!draft || !draft.savedAt || Date.now() - Number(draft.savedAt) > CAPTURE_DRAFT_TTL_MS) { this.clearCaptureDraft(); return } if (draft.taskId) { this.$message.info('已恢复 24 小时内的采集任务草稿'); this.openTask(draft.taskId); return } if (Array.isArray(draft.imageFileIds) && draft.imageFileIds.length) { this.form = Object.assign({}, this.form, draft.form || {}); this.imageFileIds = draft.imageFileIds; this.uploadFiles = draft.imageFileIds.map((id, index) => ({ uid: `draft-${id}`, name: (draft.fileNames || [])[index] || `已上传文件 #${id}`, captureFileId: id })); this.$message.info('已恢复 24 小时内的上传草稿，可继续开始识别') } },
-    selectPage(page) { this.currentPageId = page.id; this.showCleaned = false; this.compareImages = false; this.originalPageUrl = ''; this.cleanedPageUrl = ''; if (page.status === 4 && !page.sourcePageNo) { this.currentPageUrl = ''; return } this.showPageImage(false) },
-    showPageImage(cleaned) { if (!this.currentPage || (cleaned && this.currentPage.cleanStatus !== 2)) return; const fileId = cleaned ? this.currentPage.cleanedFileId : this.currentPage.imageFileId; this.compareImages = false; this.showCleaned = cleaned; this.currentPageUrl = ''; downloadUrl({ fileId, uploadType: 'wrongQuestion' }).then(url => { this.currentPageUrl = url }) },
-    showImageCompare() { if (!this.currentPage || this.currentPage.cleanStatus !== 2) return; this.showCleaned = false; this.compareImages = true; this.currentPageUrl = ''; Promise.all([downloadUrl({ fileId: this.currentPage.imageFileId, uploadType: 'wrongQuestion' }), downloadUrl({ fileId: this.currentPage.cleanedFileId, uploadType: 'wrongQuestion' })]).then(([originalUrl, cleanedUrl]) => { this.originalPageUrl = originalUrl; this.cleanedPageUrl = cleanedUrl }).catch(() => { this.compareImages = false; this.$message.warning('图片对照加载失败，请稍后重试') }) },
+    restoreCaptureDraft() { let draft; try { draft = JSON.parse(localStorage.getItem(CAPTURE_DRAFT_STORAGE_KEY) || 'null') } catch (error) { this.clearCaptureDraft(); return } if (!draft || !draft.savedAt || Date.now() - Number(draft.savedAt) > CAPTURE_DRAFT_TTL_MS) { this.clearCaptureDraft(); return } this.captureMode = draft.captureMode || 'PAPER'; if (draft.taskId) { this.$message.info('已恢复 24 小时内的采集任务草稿'); this.openTask(draft.taskId); return } if (Array.isArray(draft.imageFileIds) && draft.imageFileIds.length) { this.form = Object.assign({}, this.form, draft.form || {}); this.imageFileIds = draft.imageFileIds; this.uploadFiles = draft.imageFileIds.map((id, index) => ({ uid: `draft-${id}`, name: (draft.fileNames || [])[index] || `已上传文件 #${id}`, captureFileId: id, status: 'done', progress: 100 })); this.$message.info('已恢复 24 小时内的上传草稿，可继续开始识别') } },
+    selectPage(page) { this.currentPageId = page.id; if (!this.activeRegion || this.activeRegion.pageId !== page.id) { const first = this.task.regionList.find(item => item.pageId === page.id && item.status === 0); this.activeRegionId = first ? first.id : null } this.showCleaned = false; this.showRealCleaned = false; this.compareImages = false; this.originalPageUrl = ''; this.cleanedPageUrl = ''; if (page.status === 4 && !page.sourcePageNo) { this.currentPageUrl = ''; return } this.showPageImage('original') },
+    showPageImage(mode) { if (!this.currentPage) return; const pageId = this.currentPage.id; const fileId = mode === 'gray' ? this.currentPage.grayscaleFileId : mode === 'clean' ? this.currentPage.cleanedFileId : this.currentPage.imageFileId; if (!fileId) return; this.compareImages = false; this.showCleaned = mode === 'gray'; this.showRealCleaned = mode === 'clean'; this.currentPageUrl = ''; downloadUrl({ fileId, uploadType: 'wrongQuestion' }).then(url => { if (this.currentPageId === pageId && !this.compareImages) this.currentPageUrl = url }) },
+    openSourceDocument() { if (!this.currentPage || !this.currentPage.sourceFileId) return; downloadUrl({ fileId: this.currentPage.sourceFileId, uploadType: 'wrongQuestion' }).then(url => window.open(url, '_blank', 'noopener')) },
+    showImageCompare() { if (!this.currentPage || this.currentPage.cleanStatus !== 2) return; this.showCleaned = false; this.showRealCleaned = false; this.compareImages = true; this.currentPageUrl = ''; Promise.all([downloadUrl({ fileId: this.currentPage.imageFileId, uploadType: 'wrongQuestion' }), downloadUrl({ fileId: this.currentPage.cleanedFileId, uploadType: 'wrongQuestion' })]).then(([originalUrl, cleanedUrl]) => { this.originalPageUrl = originalUrl; this.cleanedPageUrl = cleanedUrl }).catch(() => { this.compareImages = false; this.$message.warning('图片对照加载失败，请稍后重试') }) },
     taskStatusType(status) { return status === 4 ? 'danger' : status === 2 ? 'warning' : status === 3 ? 'success' : 'info' },
     statusText(status) { return ['排队中', '处理中', '待确认', '已完成', '失败'][status] || '待处理' },
-    cleanStatusText(page) { return ['', '灰度预览生成中', '灰度预览已就绪', '', '灰度预览生成失败'][page.cleanStatus] || '等待生成灰度预览' },
+    cleanStatusText(page) { const text = ['', '去笔迹处理中', '去笔迹图已就绪', '', '去笔迹失败'][page.cleanStatus] || '尚未生成去笔迹图'; if (page.cleanStatus !== 2) return text; return page.cleanProvider === 'MANUAL_REDACTION' ? `${text}（人工遮罩）` : `${text}（质量 ${page.cleanQualityScore || 0}/10000）` },
+    grayscaleStatusText(page) { return ['', '灰度预览处理中', '灰度预览已就绪', '', '灰度预览失败'][page.grayscaleStatus] || '灰度预览未生成' },
+    generateCleanImage() { if (!this.currentPage) return; generateQuestionCaptureCleanImage({ id: this.currentPage.id }).then(() => { this.$message.info('已提交本地去笔迹处理，请稍候刷新'); return this.loadTask() }) },
+    selectManualCleanImage() { if (!this.currentPage || this.manualCleanUploading) return; this.$refs.manualCleanFileInput.click() },
+    uploadManualCleanImage(event) {
+      const file = event.target.files && event.target.files[0]; event.target.value = ''
+      if (!file || !this.currentPage) return
+      if (!String(file.type || '').startsWith('image/')) return this.$message.warning('人工遮罩图必须是 PNG、JPG、WebP 或 BMP 图片')
+      const pageId = this.currentPage.id; this.manualCleanUploading = true
+      return filePolicy({ uploadType: 'wrongQuestion' }).then(policy => {
+        const data = new FormData(); data.append('file', file); data.append('signature', policy.signature); data.append('fileName', file.name)
+        return uploadFile(data)
+      }).then(uploaded => applyQuestionCaptureManualCleanImage({ id: pageId, cleanedFileId: Number(uploaded.id) }))
+        .then(() => { this.$message.success('人工遮罩图已应用；原图仍可随时回退'); return this.loadTask() })
+        .finally(() => { this.manualCleanUploading = false })
+    },
+    revertCleanImage() { if (!this.currentPage) return; this.$confirm('会放弃当前页清理图，并将未确认题块恢复为原图。原图与历史清理版本仍会保留，是否继续？', '回退原图').then(() => revertQuestionCaptureCleanImage({ id: this.currentPage.id })).then(() => { this.$message.success('已回退原图'); this.selectPage(this.currentPage); return this.loadTask() }).catch(() => {}) },
     isLowConfidence(region) { return Number(region.confidence || 0) < this.confidenceThreshold },
     isFieldLowConfidence(confidence) { return Number(confidence || 0) < this.confidenceThreshold },
+    pageNumber(pageId) { const page = this.task && this.task.pageList.find(item => item.id === pageId); return page ? page.pageNo : '-' },
+    pagePendingCount(pageId) { return this.task ? this.task.regionList.filter(item => item.pageId === pageId && item.status === 0).length : 0 },
+    pageLowConfidenceCount(pageId) { return this.task ? this.task.regionList.filter(item => item.pageId === pageId && item.status === 0 && this.isLowConfidence(item)).length : 0 },
+    lowConfidenceQueue() { return this.task ? this.task.regionList.filter(item => item.status === 0 && this.isLowConfidence(item)).sort((a, b) => this.pageNumber(a.pageId) - this.pageNumber(b.pageId) || a.regionNo - b.regionNo) : [] },
+    navigateLowConfidence(offset) { const queue = this.lowConfidenceQueue(); if (!queue.length) return this.$message.info('没有待处理的低置信题块'); const current = queue.findIndex(item => item.id === this.activeRegionId); const start = current < 0 ? (offset > 0 ? -1 : 0) : current; this.focusRegion(queue[(start + offset + queue.length) % queue.length]) },
+    nextLowConfidence() { this.navigateLowConfidence(1) },
+    previousLowConfidence() { this.navigateLowConfidence(-1) },
+    handleShortcut(event) {
+      if (!this.task || Number(this.task.status) !== 2 || this.regionEditorOpen || event.altKey) return
+      const target = event.target
+      if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return
+      const key = String(event.key || '').toLowerCase()
+      if (key === 'enter' && (event.ctrlKey || event.metaKey) && this.activeRegion && this.activeRegion.status === 0) { event.preventDefault(); this.confirmRegions([this.activeRegion]); return }
+      if (event.ctrlKey || event.metaKey) return
+      if (key === 'n') { event.preventDefault(); if (event.shiftKey) this.previousLowConfidence(); else this.nextLowConfidence() }
+      if (key === 'a') { event.preventDefault(); this.toggleCreateRegion() }
+      if (key === 'x' && this.activeRegion && this.activeRegion.status === 0) { event.preventDefault(); this.splitRegion() }
+      if (key === 's' && this.activeRegion && this.activeRegion.status === 0) { event.preventDefault(); this.deleteRegion() }
+    },
+    saveBatchMetadata() {
+      const regionIds = this.batchRegionIds()
+      if (!regionIds.length) return this.$message.warning('请勾选题块，或选择全部待确认题块')
+      if (!Object.values(this.batchForm).some(value => String(value || '').trim())) return this.$message.warning('请至少选择一个要修改的属性')
+      this.batchSaving = true
+      return this.withSnapshot(() => batchUpdateQuestionCaptureRegion(Object.assign({ taskId: this.task.id, regionIds }, this.batchForm))).then(() => { this.batchForm = { grade: '', subject: '', questionType: '', source: '', learningPoint: '' }; this.selected = []; this.$message.success(`已更新 ${regionIds.length} 个题块`) }).finally(() => { this.batchSaving = false })
+    },
+    batchRegionIds() {
+      if (!this.task) return []
+      if (this.batchScope === 'all') return this.task.regionList.filter(item => item.status === 0).map(item => item.id)
+      if (this.batchScope === 'page') return this.task.regionList.filter(item => item.pageId === this.currentPageId && item.status === 0).map(item => item.id)
+      if (this.batchScope === 'low') return this.task.regionList.filter(item => item.status === 0 && this.isLowConfidence(item)).map(item => item.id)
+      return this.selected.filter(item => item.status === 0).map(item => item.id)
+    },
     pageHasNoRegions(page) { return this.task && !this.task.regionList.some(item => item.pageId === page.id && item.status !== 2) },
     canSavePageAsImage(page) { return this.task && [2, 4].includes(Number(this.task.status)) && page.sourcePageNo && (page.status === 4 || this.pageHasNoRegions(page)) },
     changeSelection(rows) { this.selected = rows },
+    selectRows(predicate) { const table = this.$refs.regionTable; if (!table) return; table.clearSelection(); this.$nextTick(() => this.displayRegions.filter(item => item.status === 0 && predicate(item)).forEach(item => table.toggleRowSelection(item, true))) },
+    selectCurrentPageRegions() { this.lowConfidenceOnly = false; this.$nextTick(() => this.selectRows(item => item.pageId === this.currentPageId)) },
+    selectLowConfidenceRegions() { this.selectRows(item => this.isLowConfidence(item)) },
     regionStyle(region) { return { left: `${region.leftPosition / 100}%`, top: `${region.topPosition / 100}%`, width: `${region.width / 100}%`, height: `${region.height / 100}%` } },
     focusRegion(region) { this.activeRegionId = region.id; if (region.pageId !== this.currentPageId) { const page = this.task.pageList.find(item => item.id === region.pageId); if (page) this.selectPage(page) } },
     startDrag(event, region, mode) { if (region.status !== 0) return; this.activeRegionId = region.id; this.pointer = { mode, region, x: event.clientX, y: event.clientY, left: region.leftPosition, top: region.topPosition, width: region.width, height: region.height }; window.addEventListener('mousemove', this.movePointer); window.addEventListener('mouseup', this.stopPointer) },
@@ -179,13 +364,56 @@ export default {
     restoreSnapshot(snapshot) { return restoreQuestionCaptureRegionSnapshot({ taskId: this.task.id, regionList: snapshot }).then(() => this.loadTask()) },
     undo() { const snapshot = this.undoStack.pop(); if (!snapshot) return; const current = this.currentSnapshot(); this.restoreSnapshot(snapshot).then(() => this.redoStack.push(current)).catch(() => this.undoStack.push(snapshot)) },
     redo() { const snapshot = this.redoStack.pop(); if (!snapshot) return; const current = this.currentSnapshot(); this.restoreSnapshot(snapshot).then(() => this.undoStack.push(current)).catch(() => this.redoStack.push(snapshot)) },
-    confirm() { const payload = { taskId: this.task.id, regionIds: this.selected.map(item => item.id) }; questionCaptureDuplicateList(payload).then(list => { if (!list || !list.length) return this.confirmCapture(payload); const message = `${list.map(item => `题块 ${item.regionId} 与错题 #${item.wrongQuestionId}「${item.questionTitle || '未命名题目'}」完全相同`).join('；')}。仍要继续创建吗？`; return this.$confirm(message, '发现重复错题', { confirmButtonText: '仍然创建', cancelButtonText: '返回检查', type: 'warning' }).then(() => this.confirmCapture(payload)) }).catch(() => {}) },
-    confirmCapture(payload) { return confirmQuestionCapture(payload).then(count => { this.$message.success(`已创建 ${count} 道错题`); this.selected = []; this.loadTask(); this.loadHistory(this.history.current) }) },
+    confirm() { return this.confirmRegions(this.selected) },
+    confirmRegions(regions) {
+      if (this.confirming) return Promise.resolve()
+      const payload = { taskId: this.task.id, regionIds: regions.filter(item => item.status === 0).map(item => item.id) }
+      if (!payload.regionIds.length) return Promise.resolve()
+      this.confirming = true
+      return questionCaptureDuplicateList(payload).then(list => {
+        if (!list || !list.length) return this.confirmCapture(payload)
+        const message = `${list.map(item => `题块 ${item.regionId} 与错题 #${item.wrongQuestionId}「${item.questionTitle || '未命名题目'}」完全相同`).join('；')}。仍要继续创建吗？`
+        return this.$confirm(message, '发现重复错题', { confirmButtonText: '仍然创建', cancelButtonText: '返回检查', type: 'warning' }).then(() => this.confirmCapture(payload))
+      }).catch(() => {}).finally(() => { this.confirming = false })
+    },
+    confirmCapture(payload) { return confirmQuestionCapture(payload).then(count => { this.$message.success(`已创建 ${count} 道错题`); this.selected = []; return this.loadTask() }).then(() => this.loadHistory(this.history.current)) },
     openWrongQuestion(row) { this.$router.push({ path: '/system/wrongquestion', query: { wrongQuestionId: row.wrongQuestionId } }) }
   }
 }
 </script>
 
 <style scoped>
-.task-card { margin-top: 16px; }.card-header { display: flex; justify-content: space-between; align-items: center; }.task-progress { display: flex; align-items: center; gap: 12px; margin: 12px 0; color: #606266; font-size: 13px; }.task-progress .el-progress { width: 260px; }.capture-workbench { display: flex; gap: 16px; margin: 16px 0; }.page-list, .region-help { width: 170px; }.page-item { margin-bottom: 10px; }.page-item .el-button:first-child { width: 90px; }.page-fail-reason { margin: 3px 0 0; color: #f56c6c; font-size: 12px; line-height: 1.4; word-break: break-word; }.canvas-panel { flex: 1; min-width: 0; padding: 12px; background: #f5f7fa; }.image-switch { margin-bottom: 8px; }.clean-status, .uploading-tip, .field-confidence { margin-left: 8px; font-size: 12px; color: #909399; }.capture-file-notice { margin-top: 6px; color: #909399; font-size: 12px; line-height: 1.5; }.upload-file-order { margin-top: 8px; color: #606266; font-size: 12px; }.upload-file-order-item { display: inline-block; margin: 0 8px 4px 0; }.upload-file-order .el-button { padding: 0 3px; }.upload-quality-warnings { margin-top: 8px; color: #e6a23c; font-size: 12px; line-height: 1.5; }.upload-quality-warnings p { margin: 2px 0; }.image-canvas { position: relative; display: inline-block; width: 100%; line-height: 0; }.image-canvas.create-region-mode { cursor: crosshair; }.image-canvas img { width: 100%; max-height: 650px; object-fit: contain; }.image-compare { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }.image-compare figure { min-width: 0; margin: 0; }.image-compare figcaption { padding: 6px 8px; line-height: 20px; background: #ebeef5; color: #606266; font-size: 13px; }.image-compare img { display: block; width: 100%; max-height: 650px; object-fit: contain; background: #fff; }.region-box { position: absolute; box-sizing: border-box; border: 2px solid #409eff; background: rgba(64, 158, 255, .08); cursor: move; line-height: 20px; }.region-box.active { border-color: #f56c6c; }.region-box.manual-region { cursor: crosshair; }.region-box.low-confidence { border-color: #e6a23c; background: rgba(230, 162, 60, .12); }.region-box.skipped { border-style: dashed; opacity: .55; }.region-label { padding: 1px 4px; color: #fff; background: #409eff; font-size: 12px; }.resize-handle { position: absolute; right: -5px; bottom: -5px; width: 10px; height: 10px; background: #409eff; cursor: nwse-resize; }.region-help { font-size: 12px; color: #606266; }.region-help .el-button { display: block; width: 100%; margin: 0 0 8px; }.region-filter { display: flex; gap: 16px; align-items: center; margin: 12px 0; color: #606266; font-size: 13px; }.low-confidence-input ::v-deep textarea, .low-confidence-input ::v-deep input { border-color: #e6a23c; background: #fdf6ec; }
+.task-card { margin-top: 16px; }.card-header { display: flex; justify-content: space-between; align-items: center; }.task-progress { display: flex; align-items: center; gap: 12px; margin: 12px 0; color: #606266; font-size: 13px; }.task-progress .el-progress { width: 260px; }.capture-workbench { display: flex; gap: 16px; margin: 16px 0; }.page-list, .region-help { width: 170px; }.page-item { margin-bottom: 10px; }.page-item .el-button:first-child { width: 90px; }.page-fail-reason { margin: 3px 0 0; color: #f56c6c; font-size: 12px; line-height: 1.4; word-break: break-word; }.canvas-panel { flex: 1; min-width: 0; padding: 12px; background: #f5f7fa; }.image-switch { margin-bottom: 8px; }.manual-clean-input { display: none; }.clean-status, .uploading-tip, .field-confidence { margin-left: 8px; font-size: 12px; color: #909399; }.capture-file-notice { margin-top: 6px; color: #909399; font-size: 12px; line-height: 1.5; }.upload-file-order { margin-top: 8px; color: #606266; font-size: 12px; }.upload-file-order-item { display: inline-block; margin: 0 8px 4px 0; }.upload-file-order .el-button { padding: 0 3px; }.upload-quality-warnings { margin-top: 8px; color: #e6a23c; font-size: 12px; line-height: 1.5; }.upload-quality-warnings p { margin: 2px 0; }.image-canvas { position: relative; display: inline-block; width: 100%; line-height: 0; }.image-canvas.create-region-mode { cursor: crosshair; }.image-canvas img { width: 100%; max-height: 650px; object-fit: contain; }.image-compare { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }.image-compare figure { min-width: 0; margin: 0; }.image-compare figcaption { padding: 6px 8px; line-height: 20px; background: #ebeef5; color: #606266; font-size: 13px; }.image-compare img { display: block; width: 100%; max-height: 650px; object-fit: contain; background: #fff; }.region-box { position: absolute; box-sizing: border-box; border: 2px solid #409eff; background: rgba(64, 158, 255, .08); cursor: move; line-height: 20px; }.region-box.active { border-color: #f56c6c; }.region-box.manual-region { cursor: crosshair; }.region-box.low-confidence { border-color: #e6a23c; background: rgba(230, 162, 60, .12); }.region-box.skipped { border-style: dashed; opacity: .55; }.region-label { padding: 1px 4px; color: #fff; background: #409eff; font-size: 12px; }.resize-handle { position: absolute; right: -5px; bottom: -5px; width: 10px; height: 10px; background: #409eff; cursor: nwse-resize; }.region-help { font-size: 12px; color: #606266; }.region-help .el-button { display: block; width: 100%; margin: 0 0 8px; }.region-filter { display: flex; gap: 16px; align-items: center; margin: 12px 0; color: #606266; font-size: 13px; }.low-confidence-input ::v-deep textarea, .low-confidence-input ::v-deep input { border-color: #e6a23c; background: #fdf6ec; }
+.capture-mode { display: flex; align-items: center; gap: 16px; margin-bottom: 18px; color: #606266; font-size: 13px; }
+.capture-dropzone { display: flex; align-items: center; gap: 14px; min-height: 78px; padding: 12px 18px; border: 2px dashed #b9c7d8; border-radius: 8px; color: #64748b; background: #f8fbff; }
+.capture-dropzone.dragging, .capture-dropzone:focus { border-color: #409eff; background: #ecf5ff; outline: none; }
+.capture-file-input { display: none; }
+.document-title-input { margin-bottom: 8px; }
+.document-content-editor { min-height: 116px; padding: 10px 12px; overflow: auto; border: 1px solid #dcdfe6; border-radius: 4px; color: #303133; line-height: 1.6; background: #fff; }
+.document-content-editor:empty::before { content: attr(data-placeholder); color: #c0c4cc; }
+.document-content-editor:focus { border-color: #409eff; outline: none; }
+.document-content-editor img { max-width: 100%; max-height: 260px; }
+.upload-file-order-item { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; margin-top: 3px; }
+.upload-file-order-item > span:first-child { min-width: 180px; }
+.upload-file-order-item .el-progress { width: 120px; }
+.capture-workbench { display: grid; grid-template-columns: 156px minmax(360px, 1fr) 290px; gap: 14px; }
+.page-list { width: auto; max-height: 730px; overflow-y: auto; }
+.page-list-title { margin-bottom: 8px; font-weight: 600; }
+.page-item { font-size: 12px; }
+.page-region-summary { margin: 3px 0; color: #e6a23c; }
+.page-thumb { width: 116px; height: 86px; overflow: hidden; border: 2px solid #d9e2ed; border-radius: 5px; background: #fff; color: #606266; cursor: pointer; }
+.page-thumb.active { border-color: #409eff; box-shadow: 0 0 0 2px #dceeff; }
+.page-thumb img { width: 100%; height: 100%; object-fit: contain; }
+.canvas-panel { min-width: 0; }
+.region-editor { max-height: 730px; overflow-y: auto; padding: 10px; border: 1px solid #e4e7ed; border-radius: 6px; font-size: 12px; }
+.region-editor p { color: #64748b; line-height: 1.5; }
+.region-editor .el-button { margin: 4px 4px 0 0; }
+.region-editor .el-form-item { margin-bottom: 9px; }
+.region-editor .el-select { width: 100%; }
+.active-region-title { margin: 16px 0 10px; font-weight: 600; }
+.batch-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 16px 0; padding: 12px; border-radius: 6px; background: #f6f9fc; }
+.batch-meta .el-select { width: 150px; }
+.batch-meta .el-input { width: 180px; }
+.region-filter { flex-wrap: wrap; }
+@media (max-width: 1100px) { .capture-workbench { grid-template-columns: 120px minmax(320px, 1fr); } .region-editor { grid-column: 1 / -1; max-height: none; } }
 </style>

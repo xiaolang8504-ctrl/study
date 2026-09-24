@@ -11,5 +11,18 @@
   "20260914_review_record_independent_answer.sql": "876d9dc212e584890a86c8eeb479b6c0d85d8907556cdc494b9afe447d739c4e",
   "20260914_wrong_question_timeline.sql": "c55af94cb7381ae3cc6e8c453e4be303ea587566e7ae064349eb457ea00e0e1c",
   "20260921_guardian_web_menu.sql": "88c0f566da930d76ce1a277f8458d2ab0c69c3614d0101c41fbc3dffa6c27d5e",
-  "20260921_review_mastery_evidence_reset.sql": "b8a298f0b6ad3c1e202142bf30190b1add3e1823651f053916244b59df54b584"
+  "20260921_review_mastery_evidence_reset.sql": "b8a298f0b6ad3c1e202142bf30190b1add3e1823651f053916244b59df54b584",
+  "20260922_student_guardian_roles.sql": "335ed0cca60aeb9a7dff2d4e5b7bde4fb3a8c618178272e7eeef92f0d10e75f9",
+  "20260923_p0_organize_and_clean.sql": "60dff06bae9fbd25f13a640c3bddf7727b2e6a3946b54d6025925f190b639f0c",
+  "20260923_p0_question_learning_loop.sql": "3d94533ebfcad22e01ea01b54a024bf7872e967c5d3d5ea51f4109cff845f5ac",
+  "20260923_practice_paper_basket.sql": "be1eb1d8d98cc0c4f34737a4cc1d096e80a6750f1e4b2f69c0774a568ce86b41",
+  "20260923_practice_paper_image_mode.sql": "0820d16ea1ab071725c6050336bb0a546248277a380e087303986042978c1494",
+  "20260924_f2_layered_explanation.sql": "0330a928106b3ef51f8a8e7d0b1060adc21d04ac7600b06111d78dd8bd4dbb58",
+  "20260924_f2_exam_sprint.sql": "16abaa9e7fd72b17e8afb9a40e90f5aa2bc1e91b2ba7f93aa7bf8183637ddad1",
+  "20260924_f2_structured_diagnosis.sql": "e9f30babdcc45f96bc90d157d2ef551f5d0f8d86078f5bed2415a643fcaa8890",
+  "20260924_f3_textbook_regional_question.sql": "242348b6d0be6ca1e626477bb96ff9a0ae01ac958a5759ffedec01bd33924381",
+  "20260924_f3_learning_path_variant.sql": "ed5153abb5da22ca0793f586aaf9217d0dd96d7af11f86c1f794c7fa5afa3f1f",
+  "20260924_p0_practice_paper_fill.sql": "3a2bd34c19312876ba16e5a20b90235d97b3187f07faf82dcc20346dcb1546cf",
+  "20260924_p2_content_governance.sql": "da2ec11fbda68b9b0c2f79707edce30728a66ec3d07877daec6de2cf2ae0ba83",
+  "20260924_p2_guardian_weekly_plan.sql": "1718083b35b78eb962302d377706d3f88ff59d927abd0e6b10032d48de8e92e5"
 }

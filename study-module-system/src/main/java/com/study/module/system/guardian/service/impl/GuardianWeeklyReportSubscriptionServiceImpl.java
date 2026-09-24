@@ -21,5 +21,11 @@ import java.time.LocalDateTime; import java.util.List;
         entity.setSiteNotificationEnabled(request.getSiteNotificationEnabled()); entity.setEmailEnabled(request.getEmailEnabled()); entity.setUpdateTime(now); saveOrUpdate(entity);
         guardianAccessAuditService.record(null, request.getStudentUserId(), guardianId, guardianId, "WEEKLY_REPORT_PREFERENCE_UPDATED", "SUCCESS", "更新周报提醒偏好");
     }
-    @Override public List<GuardianWeeklyReportSubscription> guardianWeeklyReportSubscriptionList() { return list(new LambdaQueryWrapper<GuardianWeeklyReportSubscription>().eq(GuardianWeeklyReportSubscription::getGuardianUserId, AccountUtils.getUserId())); }
+    @Override public void unsubscribeGuardianWeeklyReport(Long studentUserId) {
+        Long guardianId = AccountUtils.getUserId(); if (!guardianBindingService.canCurrentGuardianAccessStudent(studentUserId)) throw new LogicException(ErrorCodeConstants.GUARDIAN_BINDING_NOT_EXIST);
+        GuardianWeeklyReportSubscription entity = getOne(new LambdaQueryWrapper<GuardianWeeklyReportSubscription>().eq(GuardianWeeklyReportSubscription::getGuardianUserId, guardianId).eq(GuardianWeeklyReportSubscription::getStudentUserId, studentUserId));
+        if (entity != null) { entity.setSiteNotificationEnabled(0); entity.setEmailEnabled(0); entity.setUpdateTime(LocalDateTime.now()); updateById(entity); }
+        guardianAccessAuditService.record(null, studentUserId, guardianId, guardianId, "WEEKLY_REPORT_UNSUBSCRIBED", "SUCCESS", "退订家长周报提醒");
+    }
+    @Override public List<GuardianWeeklyReportSubscription> guardianWeeklyReportSubscriptionList() { List<Long> studentIds = guardianBindingService.activeStudentIdsOfCurrentGuardian(); if (studentIds.isEmpty()) return java.util.Collections.emptyList(); return list(new LambdaQueryWrapper<GuardianWeeklyReportSubscription>().eq(GuardianWeeklyReportSubscription::getGuardianUserId, AccountUtils.getUserId()).in(GuardianWeeklyReportSubscription::getStudentUserId, studentIds)); }
 }

@@ -5,10 +5,14 @@ import com.study.common.core.exception.LogicException;
 import com.study.module.system.review.constants.PracticeSessionStatus;
 import com.study.module.system.review.constants.PracticeQuestionSource;
 import com.study.module.system.questionbank.entity.QuestionBank;
+import com.study.module.system.questionbank.entity.QuestionBankImage;
+import com.study.module.system.questionbank.service.QuestionBankImageService;
 import com.study.module.system.questionbank.service.QuestionBankService;
+import com.study.module.system.review.dto.request.PracticeQuestionSelectReq;
 import com.study.module.system.review.dto.request.PracticeSessionCreateReq;
 import com.study.module.system.review.dto.response.PracticeSessionDetailResp;
 import com.study.module.system.review.dto.response.PracticeSessionPreviewResp;
+import com.study.module.system.review.dto.response.PracticeSessionPreviewQuestionResp;
 import com.study.module.system.review.entity.PracticeSession;
 import com.study.module.system.review.entity.PracticeSessionQuestion;
 import com.study.module.system.review.entity.ReviewItem;
@@ -17,6 +21,10 @@ import com.study.module.system.review.service.PracticeSessionQuestionService;
 import com.study.module.system.review.service.PracticeSessionService;
 import com.study.module.system.review.service.ReviewItemService;
 import com.study.module.system.wrongquestion.entity.WrongQuestion;
+import com.study.module.system.wrongquestion.entity.WrongQuestionAsset;
+import com.study.module.system.wrongquestion.entity.QuestionCapturePage;
+import com.study.module.system.wrongquestion.service.WrongQuestionAssetService;
+import com.study.module.system.wrongquestion.service.QuestionCapturePageService;
 import com.study.module.system.wrongquestion.service.WrongQuestionService;
 import com.yunshang.budget.common.security.utils.AccountUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,6 +41,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import com.alibaba.fastjson.JSON;
+import com.study.module.system.review.dto.response.PracticeQuestionImageResp;
 
 /**
  * 创建专项练习服务实现
@@ -55,6 +65,15 @@ public class PracticeSessionCreateServiceImpl implements PracticeSessionCreateSe
     @Autowired
     QuestionBankService questionBankService;
 
+    @Autowired
+    QuestionCapturePageService questionCapturePageService;
+
+    @Autowired
+    QuestionBankImageService questionBankImageService;
+
+    @Autowired
+    WrongQuestionAssetService wrongQuestionAssetService;
+
     /**
      * 预览当前组卷规则可生成的题目，预览不写入任何练习数据。
      */
@@ -62,11 +81,12 @@ public class PracticeSessionCreateServiceImpl implements PracticeSessionCreateSe
     public PracticeSessionPreviewResp previewPracticeSession(PracticeSessionCreateReq request) {
         Long userId = AccountUtils.getUserId();
         PracticeSelection selection = selectCandidates(userId, request);
+        int questionCount = effectiveQuestionCount(request);
         PracticeSessionPreviewResp response = new PracticeSessionPreviewResp();
-        response.setRequestedQuestionCount(request.getQuestionCount());
+        response.setRequestedQuestionCount(questionCount);
         response.setAvailableQuestionCount(selection.candidates.size());
         response.setShortageQuestionCount(Math.max(0,
-                request.getQuestionCount() - selection.candidates.size()));
+                questionCount - selection.candidates.size()));
         response.setWrongQuestionCount((int) selection.candidates.stream()
                 .filter(candidate -> PracticeQuestionSource.WRONG_QUESTION.equals(candidate.questionSource))
                 .count());
@@ -79,6 +99,9 @@ public class PracticeSessionCreateServiceImpl implements PracticeSessionCreateSe
                 .distinct()
                 .collect(Collectors.toList()));
         response.setGenerationReason(buildGenerationReason(request, selection.source));
+        response.setQuestionList(selection.candidates.stream()
+                .map(this::buildPreviewQuestion)
+                .collect(Collectors.toList()));
         return response;
     }
 
@@ -90,7 +113,8 @@ public class PracticeSessionCreateServiceImpl implements PracticeSessionCreateSe
     public PracticeSessionDetailResp createPracticeSession(PracticeSessionCreateReq request) {
         Long userId = AccountUtils.getUserId();
         PracticeSelection selection = selectCandidates(userId, request);
-        if (selection.candidates.size() < request.getQuestionCount()) {
+        int questionCount = effectiveQuestionCount(request);
+        if (selection.candidates.size() < questionCount) {
             throw new LogicException(ErrorCodeConstants.PRACTICE_SESSION_QUESTION_INSUFFICIENT);
         }
         List<PracticeCandidate> candidates = selection.candidates;
@@ -99,8 +123,16 @@ public class PracticeSessionCreateServiceImpl implements PracticeSessionCreateSe
         PracticeSession session = new PracticeSession();
         session.setUserId(userId);
         session.setPracticeType(request.getPracticeType());
-        session.setTitle(buildTitle(request));
+        session.setTitle(StringUtils.hasText(request.getTitle())
+                ? request.getTitle().trim() : buildTitle(request));
         session.setGenerationReason(buildGenerationReason(request, selection.source));
+        session.setBlankLineCount(request.getBlankLineCount() == null ? 3 : request.getBlankLineCount());
+        session.setAnswerPosition(StringUtils.hasText(request.getAnswerPosition())
+                ? request.getAnswerPosition() : "END");
+        session.setImageMode(StringUtils.hasText(request.getImageMode())
+                ? request.getImageMode() : "ORIGINAL");
+        session.setPaperVersion(1);
+        session.setColumnCount(request.getColumnCount() == null ? 1 : request.getColumnCount());
         session.setSubject(request.getSubject());
         session.setSubjectName(candidates.isEmpty() ? "" : candidates.get(0).subjectName());
         session.setLearningPoint(request.getLearningPoint());
@@ -118,6 +150,19 @@ public class PracticeSessionCreateServiceImpl implements PracticeSessionCreateSe
         session.setUpdateTime(now);
         practiceSessionService.save(session);
 
+        List<QuestionCapturePage> capturePages = loadCapturePages(selection.wrongQuestions);
+        List<QuestionBankImage> bankImages = loadBankImages(selection.bankQuestions);
+        Map<Long, QuestionCapturePage> capturePageMap = capturePages.stream()
+                .collect(Collectors.toMap(QuestionCapturePage::getId, item -> item, (left, right) -> left));
+        Map<Long, List<QuestionBankImage>> bankImageMap = bankImages.stream()
+                .collect(Collectors.groupingBy(QuestionBankImage::getQuestionId));
+        List<Long> wrongQuestionIds = selection.wrongQuestions.stream().map(WrongQuestion::getId)
+                .collect(Collectors.toList());
+        Map<Long, List<WrongQuestionAsset>> wrongAssetMap = wrongQuestionIds.isEmpty()
+                ? Collections.emptyMap() : wrongQuestionAssetService.lambdaQuery()
+                .in(WrongQuestionAsset::getWrongQuestionId, wrongQuestionIds)
+                .orderByAsc(WrongQuestionAsset::getWrongQuestionId, WrongQuestionAsset::getSortNo)
+                .list().stream().collect(Collectors.groupingBy(WrongQuestionAsset::getWrongQuestionId));
         int sortNo = 1;
         for (PracticeCandidate candidate : candidates) {
             PracticeSessionQuestion sessionQuestion = new PracticeSessionQuestion();
@@ -128,6 +173,13 @@ public class PracticeSessionCreateServiceImpl implements PracticeSessionCreateSe
             sessionQuestion.setBankQuestionId(candidate.bankQuestionId());
             sessionQuestion.setSortNo(sortNo++);
             sessionQuestion.setQuestionTitleSnapshot(candidate.questionTitle());
+            sessionQuestion.setQuestionContentSnapshot(candidate.questionContent());
+            sessionQuestion.setContentFormatSnapshot(candidate.contentFormat());
+            sessionQuestion.setOptionsJsonSnapshot(candidate.optionsJson());
+            sessionQuestion.setCorrectAnswerSnapshot(candidate.correctAnswer());
+            sessionQuestion.setAnalysisSnapshot(candidate.analysis());
+            sessionQuestion.setAssetSnapshotJson(buildAssetSnapshot(candidate, wrongAssetMap,
+                    bankImageMap, capturePageMap, session.getImageMode()));
             sessionQuestion.setSourceReason(candidate.sourceReason());
             sessionQuestion.setSubject(candidate.subject());
             sessionQuestion.setSubjectName(candidate.subjectName());
@@ -142,13 +194,85 @@ public class PracticeSessionCreateServiceImpl implements PracticeSessionCreateSe
                 .orderByAsc(PracticeSessionQuestion::getSortNo)
                 .list();
         return PracticeSessionSupport.buildDetail(session, sessionQuestions,
-                selection.wrongQuestions, selection.bankQuestions);
+                selection.wrongQuestions, selection.bankQuestions,
+                capturePages, bankImages, false);
+    }
+
+    private String buildAssetSnapshot(PracticeCandidate candidate,
+                                      Map<Long, List<WrongQuestionAsset>> wrongAssetMap,
+                                      Map<Long, List<QuestionBankImage>> bankImageMap,
+                                      Map<Long, QuestionCapturePage> capturePageMap,
+                                      String imageMode) {
+        if ("TEXT_ONLY".equals(imageMode)) {
+            return "[]";
+        }
+        List<PracticeQuestionImageResp> images = new ArrayList<>();
+        if (candidate.wrongQuestion != null) {
+            List<WrongQuestionAsset> assets = wrongAssetMap.getOrDefault(
+                    candidate.wrongQuestion.getId(), Collections.emptyList());
+            boolean hasCrop = assets.stream().anyMatch(item -> "QUESTION_CROP".equals(item.getAssetType())
+                    || "CLEANED_QUESTION_CROP".equals(item.getAssetType()));
+            for (WrongQuestionAsset asset : assets) {
+                if (hasCrop && ("SOURCE_PAGE".equals(asset.getAssetType()) || "CLEANED_PAGE".equals(asset.getAssetType()))) {
+                    continue;
+                }
+                PracticeQuestionImageResp image = new PracticeQuestionImageResp();
+                image.setFileId(asset.getFileId());
+                image.setUploadType(asset.getUploadType());
+                image.setImageUrl(asset.getImageUrl());
+                image.setImageType("CLEANED_QUESTION_CROP".equals(asset.getAssetType()) ? "CLEANED"
+                        : "QUESTION_CROP".equals(asset.getAssetType()) ? "ORIGINAL" : "QUESTION");
+                image.setLeftPosition(asset.getLeftPosition());
+                image.setTopPosition(asset.getTopPosition());
+                image.setWidth(asset.getWidth());
+                image.setHeight(asset.getHeight());
+                if ("GRAYSCALE".equals(imageMode) && "QUESTION_CROP".equals(asset.getAssetType())) {
+                    QuestionCapturePage page = capturePageMap.get(candidate.wrongQuestion.getCapturePageId());
+                    if (page != null && Integer.valueOf(2).equals(page.getCleanStatus())
+                            && page.getCleanedFileId() != null) {
+                        image.setFileId(Math.toIntExact(page.getCleanedFileId()));
+                        image.setImageType("GRAYSCALE");
+                    }
+                }
+                images.add(image);
+            }
+        } else {
+            for (QuestionBankImage stored : bankImageMap.getOrDefault(
+                    candidate.bankQuestion.getId(), Collections.emptyList())) {
+                PracticeQuestionImageResp image = new PracticeQuestionImageResp();
+                image.setFileId(stored.getFileId());
+                image.setUploadType(stored.getFileId() == null ? null : "questionBank");
+                image.setImageUrl(stored.getImageUrl());
+                image.setImageType("QUESTION");
+                images.add(image);
+            }
+        }
+        return images.isEmpty() ? null : JSON.toJSONString(images);
+    }
+
+    private List<QuestionCapturePage> loadCapturePages(List<WrongQuestion> wrongQuestions) {
+        List<Long> pageIds = wrongQuestions.stream().map(WrongQuestion::getCapturePageId)
+                .filter(java.util.Objects::nonNull).distinct().collect(Collectors.toList());
+        return pageIds.isEmpty() ? Collections.emptyList()
+                : questionCapturePageService.listByIds(pageIds);
+    }
+
+    private List<QuestionBankImage> loadBankImages(List<QuestionBank> bankQuestions) {
+        List<Long> questionIds = bankQuestions.stream().map(QuestionBank::getId)
+                .filter(java.util.Objects::nonNull).collect(Collectors.toList());
+        return questionIds.isEmpty() ? Collections.emptyList() : questionBankImageService.lambdaQuery()
+                .in(QuestionBankImage::getQuestionId, questionIds)
+                .orderByAsc(QuestionBankImage::getQuestionId, QuestionBankImage::getSort)
+                .list();
     }
 
     /**
      * 按请求选择候选题并保留选择过程中的题源信息，供预览和创建共用。
      */
     private PracticeSelection selectCandidates(Long userId, PracticeSessionCreateReq request) {
+        if (request.getSelectedQuestionList() != null && !request.getSelectedQuestionList().isEmpty()) {
+            return selectBasketCandidates(userId, request.getSelectedQuestionList());
+        }
         String source = StringUtils.hasText(request.getQuestionSource())
                 ? request.getQuestionSource() : PracticeQuestionSource.WRONG_QUESTION;
         List<WrongQuestion> wrongQuestions = PracticeQuestionSource.includeWrongQuestion(source)
@@ -161,6 +285,83 @@ public class PracticeSessionCreateServiceImpl implements PracticeSessionCreateSe
     }
 
     /**
+     * 按学生在组卷篮中的顺序加载题目。所有题目都重新校验归属或题库可用状态，
+     * 不信任前端传入的标题、科目等展示字段。
+     */
+    private PracticeSelection selectBasketCandidates(Long userId,
+                                                      List<PracticeQuestionSelectReq> selectedQuestions) {
+        Set<String> selectionKeys = new HashSet<>();
+        List<Long> wrongQuestionIds = new ArrayList<>();
+        List<Long> bankQuestionIds = new ArrayList<>();
+        for (PracticeQuestionSelectReq selected : selectedQuestions) {
+            if (selected == null || selected.getQuestionId() == null
+                    || (!PracticeQuestionSource.WRONG_QUESTION.equals(selected.getQuestionSource())
+                    && !PracticeQuestionSource.QUESTION_BANK.equals(selected.getQuestionSource()))) {
+                throw new LogicException(ErrorCodeConstants.PRACTICE_PAPER_BASKET_INVALID);
+            }
+            String key = selected.getQuestionSource() + ":" + selected.getQuestionId();
+            if (!selectionKeys.add(key)) {
+                throw new LogicException(ErrorCodeConstants.PRACTICE_PAPER_BASKET_INVALID);
+            }
+            if (PracticeQuestionSource.WRONG_QUESTION.equals(selected.getQuestionSource())) {
+                wrongQuestionIds.add(selected.getQuestionId());
+            } else {
+                bankQuestionIds.add(selected.getQuestionId());
+            }
+        }
+        List<WrongQuestion> wrongQuestions = wrongQuestionIds.isEmpty()
+                ? Collections.emptyList() : wrongQuestionService.lambdaQuery()
+                .eq(WrongQuestion::getCreateId, userId)
+                .isNull(WrongQuestion::getMergedToId)
+                .in(WrongQuestion::getId, wrongQuestionIds)
+                .list();
+        List<QuestionBank> bankQuestions = bankQuestionIds.isEmpty()
+                ? Collections.emptyList() : questionBankService.lambdaQuery()
+                .in(QuestionBank::getId, bankQuestionIds)
+                .eq(QuestionBank::getReviewStatus, 1)
+                .eq(QuestionBank::getEnable, 1)
+                .and(query -> query.isNull(QuestionBank::getExpireAt)
+                        .or().ge(QuestionBank::getExpireAt, java.time.LocalDate.now()))
+                .list();
+        if (wrongQuestions.size() != wrongQuestionIds.size()
+                || bankQuestions.size() != bankQuestionIds.size()) {
+            throw new LogicException(ErrorCodeConstants.PRACTICE_PAPER_BASKET_INVALID);
+        }
+        Map<Long, WrongQuestion> wrongQuestionMap = wrongQuestions.stream()
+                .collect(Collectors.toMap(WrongQuestion::getId, item -> item));
+        Map<Long, QuestionBank> bankQuestionMap = bankQuestions.stream()
+                .collect(Collectors.toMap(QuestionBank::getId, item -> item));
+        List<PracticeCandidate> candidates = new ArrayList<>();
+        for (PracticeQuestionSelectReq selected : selectedQuestions) {
+            PracticeCandidate candidate = PracticeQuestionSource.WRONG_QUESTION.equals(selected.getQuestionSource())
+                    ? PracticeCandidate.of(wrongQuestionMap.get(selected.getQuestionId()))
+                    : PracticeCandidate.of(bankQuestionMap.get(selected.getQuestionId()));
+            candidates.add(candidate);
+        }
+        return new PracticeSelection(PracticeQuestionSource.MIXED, wrongQuestions, bankQuestions, candidates);
+    }
+
+    private int effectiveQuestionCount(PracticeSessionCreateReq request) {
+        if (request.getSelectedQuestionList() != null && !request.getSelectedQuestionList().isEmpty()) {
+            return request.getSelectedQuestionList().size();
+        }
+        return request.getQuestionCount() == null ? 5 : request.getQuestionCount();
+    }
+
+    private PracticeSessionPreviewQuestionResp buildPreviewQuestion(PracticeCandidate candidate) {
+        PracticeSessionPreviewQuestionResp response = new PracticeSessionPreviewQuestionResp();
+        response.setQuestionSource(candidate.questionSource);
+        response.setQuestionId(candidate.wrongQuestionId() == null
+                ? candidate.bankQuestionId() : candidate.wrongQuestionId());
+        response.setQuestionTitle(candidate.questionTitle());
+        response.setSubjectName(candidate.subjectName());
+        response.setLearningPoint(candidate.learningPoint());
+        response.setDifficulty(candidate.difficulty());
+        response.setSourceReason(candidate.sourceReason());
+        return response;
+    }
+
+    /**
      * 查询业务数据。
      */
     private List<WrongQuestion> selectQuestions(Long userId, PracticeSessionCreateReq request) {
@@ -168,6 +369,7 @@ public class PracticeSessionCreateServiceImpl implements PracticeSessionCreateSe
         int candidateLimit = Math.max(questionCount * 8, 80);
         List<WrongQuestion> candidates = wrongQuestionService.lambdaQuery()
                 .eq(WrongQuestion::getCreateId, userId)
+                .isNull(WrongQuestion::getMergedToId)
                 .in(Boolean.TRUE.equals(request.getIncludeMastered()), WrongQuestion::getStatus, 1, 2)
                 .eq(!Boolean.TRUE.equals(request.getIncludeMastered()), WrongQuestion::getStatus, 1)
                 .eq(StringUtils.hasText(request.getSubject()), WrongQuestion::getSubject,
@@ -259,6 +461,11 @@ public class PracticeSessionCreateServiceImpl implements PracticeSessionCreateSe
                             .or().ge(QuestionBank::getExpireAt, java.time.LocalDate.now()))
                     .eq(StringUtils.hasText(request.getSubject()), QuestionBank::getSubject, request.getSubject())
                     .eq(request.getDifficulty() != null, QuestionBank::getDifficulty, request.getDifficulty())
+                    .eq(StringUtils.hasText(request.getTextbookVersion()), QuestionBank::getTextbookVersion, request.getTextbookVersion())
+                    .like(StringUtils.hasText(request.getChapterName()), QuestionBank::getChapterName, request.getChapterName())
+                    .eq(StringUtils.hasText(request.getRegion()), QuestionBank::getRegion, request.getRegion())
+                    .eq(request.getExamYear() != null, QuestionBank::getExamYear, request.getExamYear())
+                    .eq(StringUtils.hasText(request.getPaperType()), QuestionBank::getPaperType, request.getPaperType())
                     .and(StringUtils.hasText(request.getLearningPoint()), query -> query
                             .like(QuestionBank::getQuestionTitle, request.getLearningPoint())
                             .or().like(QuestionBank::getQuestionContent, request.getLearningPoint()))
@@ -267,6 +474,9 @@ public class PracticeSessionCreateServiceImpl implements PracticeSessionCreateSe
                     .last("LIMIT " + candidateLimit)
                     .list());
         }
+        // 相似题检索也必须服从学生选择的教材/地区真题范围，不能仅约束兜底查询。
+        candidates = candidates.stream().filter(item -> matchesQuestionBankScope(item, request))
+                .collect(Collectors.toList());
         Map<Long, LocalDateTime> lastPracticeTimeMap = practiceSessionQuestionService.lambdaQuery()
                 .eq(PracticeSessionQuestion::getUserId, userId)
                 .isNotNull(PracticeSessionQuestion::getBankQuestionId)
@@ -298,6 +508,17 @@ public class PracticeSessionCreateServiceImpl implements PracticeSessionCreateSe
                 .limit(questionCount - preferred.size())
                 .collect(Collectors.toList()));
         return preferred;
+    }
+
+    private boolean matchesQuestionBankScope(QuestionBank question, PracticeSessionCreateReq request) {
+        return (!StringUtils.hasText(request.getTextbookVersion())
+                || request.getTextbookVersion().equals(question.getTextbookVersion()))
+                && (!StringUtils.hasText(request.getChapterName())
+                || StringUtils.hasText(question.getChapterName())
+                && question.getChapterName().contains(request.getChapterName()))
+                && (!StringUtils.hasText(request.getRegion()) || request.getRegion().equals(question.getRegion()))
+                && (request.getExamYear() == null || request.getExamYear().equals(question.getExamYear()))
+                && (!StringUtils.hasText(request.getPaperType()) || request.getPaperType().equals(question.getPaperType()));
     }
 
     private List<PracticeCandidate> mergeCandidates(String source, Integer requestCount,
@@ -399,6 +620,12 @@ public class PracticeSessionCreateServiceImpl implements PracticeSessionCreateSe
 
     private String buildGenerationReason(PracticeSessionCreateReq request, String source) {
         List<String> conditions = new ArrayList<>();
+        if (request.getSelectedQuestionList() != null && !request.getSelectedQuestionList().isEmpty()) {
+            conditions.add("选题方式：手工组卷篮");
+            conditions.add("题序：学生自定义");
+            conditions.add("题量：" + request.getSelectedQuestionList().size());
+            return String.join("；", conditions);
+        }
         conditions.add("题源：" + sourceLabel(source));
         conditions.add(Boolean.TRUE.equals(request.getIncludeMastered()) ? "已掌握：包含" : "已掌握：排除");
         conditions.add("近7日已练题目：降权");
@@ -475,6 +702,27 @@ public class PracticeSessionCreateServiceImpl implements PracticeSessionCreateSe
          */
         private String questionTitle() {
             return wrongQuestion == null ? bankQuestion.getQuestionTitle() : wrongQuestion.getQuestionTitle();
+        }
+
+        private String questionContent() {
+            return wrongQuestion == null ? bankQuestion.getQuestionContent() : wrongQuestion.getQuestionContent();
+        }
+
+        private String contentFormat() {
+            String value = wrongQuestion == null ? bankQuestion.getContentFormat() : wrongQuestion.getContentFormat();
+            return StringUtils.hasText(value) ? value : "TEXT";
+        }
+
+        private String optionsJson() {
+            return wrongQuestion == null ? bankQuestion.getOptionsJson() : wrongQuestion.getOptionsJson();
+        }
+
+        private String correctAnswer() {
+            return wrongQuestion == null ? bankQuestion.getCorrectAnswer() : wrongQuestion.getCorrectAnswer();
+        }
+
+        private String analysis() {
+            return wrongQuestion == null ? bankQuestion.getAnalysis() : wrongQuestion.getAnalysis();
         }
 
         /**

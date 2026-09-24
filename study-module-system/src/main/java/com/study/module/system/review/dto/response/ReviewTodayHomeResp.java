@@ -50,4 +50,7 @@ public class ReviewTodayHomeResp {
 
     @ApiModelProperty("可参与复习的科目")
     private List<ReviewSubjectSettingResp> subjectSettings;
+
+    @ApiModelProperty("可解释复习计划")
+    private ReviewPlanExplanationResp planExplanation;
 }

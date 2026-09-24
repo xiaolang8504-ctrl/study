@@ -112,6 +112,14 @@ export function practicePaperExportTaskList() {
   return request({ url: '/api/review/practicePaperExportTaskList', method: 'get' })
 }
 
+export function practicePaperFillDetail(params) {
+  return request({ url: '/api/review/practicePaperFillDetail', method: 'get', params })
+}
+
+export function submitPracticePaperAnswerFill(data) {
+  return request({ url: '/api/review/submitPracticePaperAnswerFill', method: 'post', data })
+}
+
 export function submitPracticeAnswer(data) {
   return request({
     url: '/api/review/submitPracticeAnswer',
@@ -188,6 +196,10 @@ export function learningProfile() {
     url: '/api/review/learningProfile',
     method: 'get'
   })
+}
+
+export function learningPath(params) {
+  return request({ url: '/api/review/learningPath', method: 'get', params })
 }
 
 export function updateLearningProfile(data) {

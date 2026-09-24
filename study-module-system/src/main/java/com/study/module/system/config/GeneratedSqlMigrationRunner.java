@@ -51,6 +51,10 @@ public class GeneratedSqlMigrationRunner implements ApplicationRunner {
     private static final String CURRENT_WRONG_QUESTION_RESOURCE_SYNC_CHECKSUM =
             "72a57d2110d786236bcc81b5c0b8cede";
 
+    /** 此脚本使用了 MariaDB 的 IF NOT EXISTS DDL 语法；MySQL 8 需要等价的条件执行。 */
+    private static final String REVIEW_INDEPENDENT_ANSWER_SCRIPT =
+            "20260914_review_record_independent_answer.sql";
+
     private final JdbcTemplate jdbcTemplate;
 
     private final DataSource dataSource;
@@ -144,10 +148,7 @@ public class GeneratedSqlMigrationRunner implements ApplicationRunner {
         }
         Long auditId = createMigrationAudit(scriptName, checksum);
         try {
-            ResourceDatabasePopulator populator = new ResourceDatabasePopulator();
-            populator.setSqlScriptEncoding("UTF-8");
-            populator.addScript(resource);
-            populator.execute(dataSource);
+            executeScript(resource);
             jdbcTemplate.update("INSERT INTO sys_generated_sql_migration (script_name, script_checksum, execute_time) "
                             + "VALUES (?, ?, NOW())",
                     scriptName, checksum);
@@ -157,6 +158,38 @@ public class GeneratedSqlMigrationRunner implements ApplicationRunner {
             completeMigrationAudit(auditId, "FAILED", abbreviateErrorMessage(e));
             log.error("执行受管 SQL 脚本失败：{}", scriptName, e);
             throw e;
+        }
+    }
+
+    private void executeScript(Resource resource) {
+        if (REVIEW_INDEPENDENT_ANSWER_SCRIPT.equals(resource.getFilename())) {
+            ensureReviewIndependentAnswerSchema();
+            return;
+        }
+        ResourceDatabasePopulator populator = new ResourceDatabasePopulator();
+        populator.setSqlScriptEncoding("UTF-8");
+        populator.addScript(resource);
+        populator.execute(dataSource);
+    }
+
+    /** 保留原脚本及其校验和，按 MySQL 8 支持的 DDL 完成同一迁移，兼容失败后重试。 */
+    private void ensureReviewIndependentAnswerSchema() {
+        Integer columnCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() "
+                        + "AND TABLE_NAME = 'sys_review_record' AND COLUMN_NAME = 'is_independent'",
+                Integer.class);
+        if (columnCount == null || columnCount == 0) {
+            jdbcTemplate.execute("ALTER TABLE `sys_review_record` ADD COLUMN `is_independent` "
+                    + "tinyint NOT NULL DEFAULT 0 COMMENT '是否答案曝光前主动作答：0否，1是' AFTER `is_correct`");
+        }
+        Integer indexCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() "
+                        + "AND TABLE_NAME = 'sys_review_record' "
+                        + "AND INDEX_NAME = 'idx_review_record_user_independent_time'",
+                Integer.class);
+        if (indexCount == null || indexCount == 0) {
+            jdbcTemplate.execute("CREATE INDEX `idx_review_record_user_independent_time` "
+                    + "ON `sys_review_record` (`user_id`, `is_independent`, `review_time`)");
         }
     }
 

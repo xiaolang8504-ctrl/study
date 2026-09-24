@@ -36,12 +36,22 @@
           <el-option v-for="item in errorLabelOptions" :key="item.value" :label="item.value" :value="item.value" />
         </el-select>
       </el-form-item>
+      <el-form-item label="结构错因"><el-select v-model="queryParams.errorCauseCode" clearable placeholder="全部" class="filter-item"><el-option v-for="item in errorCauseOptions" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item>
+      <el-form-item label="能力层级"><el-select v-model="queryParams.abilityLevel" clearable placeholder="全部" class="filter-item"><el-option v-for="item in abilityLevelOptions" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item>
+      <el-form-item label="教材"><el-input v-model="queryParams.textbookVersion" clearable placeholder="教材版本" class="filter-item" /></el-form-item>
+      <el-form-item label="章节"><el-input v-model="queryParams.chapterName" clearable placeholder="章节" class="filter-item" /></el-form-item>
+      <el-form-item label="个人标签"><el-select v-model="queryParams.tagName" clearable filterable placeholder="标签" class="filter-item"><el-option v-for="item in personalTagOptions" :key="item.id" :label="item.tagName" :value="item.tagName" /></el-select></el-form-item>
+      <el-form-item label="收藏"><el-select v-model="queryParams.favorite" clearable placeholder="全部" class="filter-item"><el-option label="已收藏" :value="1" /><el-option label="未收藏" :value="0" /></el-select></el-form-item>
+      <el-form-item label="优先级"><el-select v-model="queryParams.priorityLevel" clearable placeholder="全部" class="filter-item"><el-option label="普通" :value="0" /><el-option v-for="item in [1, 2, 3, 4, 5]" :key="item" :label="`${item} 级`" :value="item" /></el-select></el-form-item>
       <el-form-item label="关键词">
         <el-input v-model="queryParams.keyWord" clearable placeholder="题目标题/内容" class="filter-item" />
       </el-form-item>
       <el-form-item>
         <el-button type="primary" icon="el-icon-search" @click="handleQuery">查询</el-button>
         <el-button icon="el-icon-refresh" @click="resetQuery">重置</el-button>
+        <el-select v-model="selectedSavedFilterId" size="small" clearable placeholder="常用筛选" class="saved-filter-select" @change="applySavedFilter"><el-option v-for="item in savedFilters" :key="item.id" :label="item.filterName" :value="item.id" /></el-select>
+        <el-button size="small" icon="el-icon-star-off" @click="saveCurrentFilter">保存筛选</el-button>
+        <el-button v-if="selectedSavedFilterId" size="small" type="text" @click="deleteCurrentFilter">删除筛选</el-button>
         <el-button v-if="hasMenuCode(menuCode.WRONG_QUESTION.CREATE)" type="success" icon="el-icon-plus" @click="handleCreate">录入错题</el-button>
         <el-button v-if="hasMenuCode(menuCode.WRONG_QUESTION.IMPORT)" type="warning" icon="el-icon-upload" @click="handleImport">导入A4文件</el-button>
         <el-button
@@ -53,6 +63,16 @@
         >
           导出PDF/打印
         </el-button>
+        <el-button
+          type="primary"
+          plain
+          icon="el-icon-s-order"
+          :disabled="selectedRows.length === 0"
+          @click="handleAddToPracticeBasket"
+        >
+          加入组卷篮
+        </el-button>
+        <el-button type="warning" plain icon="el-icon-folder-opened" :disabled="selectedRows.length === 0" @click="openOrganizeDialog(selectedRows)">批量整理</el-button>
         <el-button
           v-if="hasMenuCode(menuCode.WRONG_QUESTION.BATCH_DELETE)"
           type="danger"
@@ -115,7 +135,11 @@
       </el-table-column>
       <el-table-column prop="questionTitle" label="题目标题" min-width="180" show-overflow-tooltip />
       <el-table-column label="知识点" min-width="140" show-overflow-tooltip><template slot-scope="{row}">{{ (row.knowledgePointNames || []).join('、') || row.learningPoint || '-' }}</template></el-table-column>
+      <el-table-column label="教材/章节" min-width="150" show-overflow-tooltip><template slot-scope="{row}">{{ [row.textbookVersion, row.chapterName].filter(Boolean).join(' · ') || '-' }}</template></el-table-column>
+      <el-table-column label="个人标签" min-width="120" show-overflow-tooltip><template slot-scope="{row}"><el-tag v-for="tag in row.tagNames || []" :key="tag" size="mini" class="personal-tag">{{ tag }}</el-tag><span v-if="!(row.tagNames || []).length">-</span></template></el-table-column>
+      <el-table-column label="整理" width="110"><template slot-scope="{row}"><span v-if="row.favorite" title="已收藏">★</span><span v-else>☆</span><span> {{ row.priorityLevel || 0 }}级</span></template></el-table-column>
       <el-table-column prop="errorLabels" label="错误标签" min-width="140" show-overflow-tooltip />
+      <el-table-column label="能力层级" width="100"><template slot-scope="{row}"><el-tag size="mini" type="info">{{ abilityLevelLabel(row.abilityLevel) }}</el-tag></template></el-table-column>
       <el-table-column prop="wrongAnswer" label="错误答案" min-width="160" show-overflow-tooltip />
       <el-table-column prop="correctAnswer" label="正确答案" min-width="160" show-overflow-tooltip />
       <el-table-column label="错图" width="90">
@@ -137,6 +161,7 @@
           </el-tag>
         </template>
       </el-table-column>
+      <el-table-column label="学习动态" min-width="170"><template slot-scope="{row}"><div>错 {{ row.wrongOccurrenceCount || 1 }} 次 · {{ row.reviewStatus || '-' }}</div><small>最近订正：{{ row.latestCorrectionTime || '-' }}</small></template></el-table-column>
       <el-table-column prop="createTime" label="录入时间" width="170" />
       <el-table-column v-if="hasWrongQuestionRowAction" label="操作" fixed="right" width="500">
         <template slot-scope="{ row }">
@@ -145,6 +170,7 @@
           <el-button type="text" icon="el-icon-magic-stick" @click="handleSimilarPractice(row)">练同类</el-button>
           <el-button type="text" icon="el-icon-collection-tag" @click="handleBindKnowledgePoint(row)">知识点</el-button>
           <el-button type="text" icon="el-icon-warning-outline" @click="handleErrorAnalysis(row)">错因</el-button>
+          <el-button type="text" icon="el-icon-folder-opened" @click="openOrganizeDialog([row])">整理</el-button>
           <el-dropdown trigger="click" @command="command => handleStatusCommand(row, command)">
             <el-button type="text">状态<i class="el-icon-arrow-down el-icon--right" /></el-button>
             <el-dropdown-menu slot="dropdown">
@@ -203,6 +229,9 @@
         <el-form-item label="题目内容" prop="questionContent">
           <el-input v-model="form.questionContent" type="textarea" :rows="4" />
         </el-form-item>
+        <el-form-item label="内容格式"><el-radio-group v-model="form.contentFormat"><el-radio label="TEXT">普通文本</el-radio><el-radio label="LATEX">LaTeX</el-radio><el-radio label="RICH_TEXT">基础富文本</el-radio></el-radio-group></el-form-item>
+        <el-form-item v-if="form.contentFormat === 'LATEX'" label="公式预览"><latex-renderer :source="form.questionContent" /></el-form-item>
+        <el-form-item label="题目选项"><question-option-editor v-model="form.optionsJson" /></el-form-item>
         <el-form-item label="错误答案">
           <el-input v-model="form.wrongAnswer" type="textarea" :rows="2" />
         </el-form-item>
@@ -214,6 +243,15 @@
         </el-form-item>
         <el-form-item label="题目解析">
           <el-input v-model="form.analysis" type="textarea" :rows="3" />
+        </el-form-item>
+        <el-form-item label="关键提示">
+          <el-input v-model="form.keyHint" type="textarea" :rows="2" maxlength="1000" show-word-limit placeholder="只提示切入方向，例如先找不变量或先画辅助线；不要直接写出答案" />
+        </el-form-item>
+        <el-form-item label="分步过程">
+          <el-input v-model="form.solutionSteps" type="textarea" :rows="4" maxlength="4000" show-word-limit placeholder="按关键推导顺序写出解题步骤" />
+        </el-form-item>
+        <el-form-item label="易错点">
+          <el-input v-model="form.commonMistake" type="textarea" :rows="2" maxlength="1000" show-word-limit placeholder="记录易漏条件、易错公式、单位或验算点" />
         </el-form-item>
         <el-row :gutter="16">
           <el-col :span="12">
@@ -241,6 +279,8 @@
             <el-option v-for="item in errorLabelOptions" :key="item.value" :label="item.value" :value="item.value" />
           </el-select>
         </el-form-item>
+        <el-form-item label="结构化错因"><el-checkbox-group v-model="form.errorCauseCodeValues"><el-checkbox v-for="item in errorCauseOptions" :key="item.value" :label="item.value">{{ item.label }}</el-checkbox></el-checkbox-group></el-form-item>
+        <el-form-item label="能力层级"><el-radio-group v-model="form.abilityLevel"><el-radio v-for="item in abilityLevelOptions" :key="item.value" :label="item.value">{{ item.label }}</el-radio></el-radio-group></el-form-item>
         <div v-if="isChoiceQuestion" class="choice-image-grid">
           <el-form-item
             v-for="item in optionImageFields"
@@ -439,7 +479,7 @@
           </tr>
           <tr>
             <td colspan="8">
-              <div class="rich-content" v-html="formatRichContent(detail.questionContent)" />
+              <question-content-renderer :content="detail.questionContent" :content-format="detail.contentFormat" :options-json="detail.optionsJson" empty-text="-" />
             </td>
           </tr>
           <tr v-if="isDetailChoiceQuestion && detailOptionImageFields.length">
@@ -565,13 +605,30 @@
       </div>
     </el-dialog>
 
+    <el-dialog :title="`整理 ${organizeRows.length} 道错题`" :visible.sync="organizeOpen" width="620px" append-to-body>
+      <el-alert title="留空的字段不会修改；勾选“覆盖个人标签”后可设置或清空标签。批量归档会同步结束对应复习项。" type="info" :closable="false" class="organize-tip" />
+      <el-form :model="organizeForm" label-width="110px">
+        <el-form-item label="教材版本"><el-input v-model="organizeForm.textbookVersion" placeholder="留空不修改；输入空格后提交可清空" /></el-form-item>
+        <el-form-item label="章节"><el-input v-model="organizeForm.chapterName" placeholder="留空不修改；输入空格后提交可清空" /></el-form-item>
+        <el-form-item label="收藏"><el-select v-model="organizeForm.favorite" clearable placeholder="不修改"><el-option label="收藏" :value="true" /><el-option label="取消收藏" :value="false" /></el-select></el-form-item>
+        <el-form-item label="优先级"><el-select v-model="organizeForm.priorityLevel" clearable placeholder="不修改"><el-option label="普通" :value="0" /><el-option v-for="item in [1, 2, 3, 4, 5]" :key="item" :label="`${item} 级`" :value="item" /></el-select></el-form-item>
+        <el-form-item label="个人标签"><el-checkbox v-model="organizeForm.replaceTags">覆盖个人标签</el-checkbox><el-select v-if="organizeForm.replaceTags" v-model="organizeForm.tagNames" multiple filterable allow-create default-first-option clearable class="full-width" placeholder="留空即可清空标签"><el-option v-for="item in personalTagOptions" :key="item.id" :label="item.tagName" :value="item.tagName" /></el-select></el-form-item>
+        <el-form-item label="知识点"><el-checkbox v-model="organizeForm.replaceKnowledgePoints">覆盖知识点</el-checkbox><el-select v-if="organizeForm.replaceKnowledgePoints" v-model="organizeForm.knowledgePointIds" multiple filterable clearable class="full-width" placeholder="仅适用于所选错题年级、科目一致时"><el-option v-for="item in knowledgePointOptions" :key="item.id" :label="item.pointName" :value="item.id" /></el-select></el-form-item>
+        <el-form-item label="归档"><el-checkbox v-model="organizeForm.archive">批量归档所选错题</el-checkbox></el-form-item>
+      </el-form>
+      <div slot="footer"><el-button @click="organizeOpen = false">取消</el-button><el-button type="primary" :loading="organizeSaving" @click="submitOrganize">保存整理</el-button></div>
+    </el-dialog>
+
     <el-dialog title="错因分析" :visible.sync="analysisOpen" width="620px" append-to-body>
       <el-form label-width="90px">
+        <el-alert title="先选择统一错因；如有特殊情况再补充自定义标签。能力层级由学生可随时修正。" type="info" :closable="false" class="diagnosis-tip" />
+        <el-form-item label="结构化错因"><el-checkbox-group v-model="analysisForm.errorCauseCodeValues"><el-checkbox v-for="item in errorCauseOptions" :key="item.value" :label="item.value">{{ item.label }}</el-checkbox></el-checkbox-group></el-form-item>
         <el-form-item label="错因标签">
           <el-select v-model="analysisForm.errorLabelValues" multiple filterable allow-create default-first-option clearable class="full-width" placeholder="请选择或输入错因标签">
             <el-option v-for="item in errorLabelOptions" :key="item.value" :label="item.value" :value="item.value" />
           </el-select>
         </el-form-item>
+        <el-form-item label="能力层级"><el-radio-group v-model="analysisForm.abilityLevel"><el-radio v-for="item in abilityLevelOptions" :key="item.value" :label="item.value">{{ item.label }}</el-radio></el-radio-group></el-form-item>
         <el-form-item label="错误原因">
           <el-input v-model="analysisForm.wrongReason" type="textarea" :rows="4" />
         </el-form-item>
@@ -588,6 +645,7 @@
 import {
   bindWrongQuestionKnowledgePoint,
   batchDeleteWrongQuestion,
+  batchOrganizeWrongQuestion,
   createWrongQuestion,
   deleteWrongQuestion,
   importWrongQuestionImage,
@@ -599,7 +657,11 @@ import {
   wrongQuestionDetail,
   wrongQuestionErrorAnalysisStatistics,
   wrongQuestionKnowledgePointStatistics,
-  wrongQuestionPageList
+  wrongQuestionPageList,
+  wrongQuestionTagList,
+  savedWrongQuestionFilterList,
+  saveWrongQuestionFilter,
+  deleteWrongQuestionFilter
 } from '@/api/system/wrongQuestion'
 import { downloadUrl, filePolicy, uploadFile } from '@/api/system/file'
 import { dictDataOptions } from '@/api/system/dict'
@@ -607,6 +669,9 @@ import { getCurrentUserInfo } from '@/api/system/user'
 import { MENU_CODE } from '@/config/menu'
 import { knowledgePointList } from '@/api/system/questionBank'
 import { createWrongQuestionPrintWindow, renderWrongQuestionPrint } from '@/utils/wrongQuestionPrint'
+import LatexRenderer from '@/components/LatexRenderer.vue'
+import QuestionOptionEditor from '@/components/QuestionOptionEditor.vue'
+import QuestionContentRenderer from '@/components/QuestionContentRenderer.vue'
 
 const WRONG_QUESTION_UPLOAD_TYPE = 'wrongQuestion'
 const DICT_TYPES = {
@@ -617,8 +682,19 @@ const DICT_TYPES = {
   errorLabel: 'wrong_question_error_label'
 }
 
+const ERROR_CAUSE_OPTIONS = [
+  { value: 'READING', label: '审题' }, { value: 'CONCEPT', label: '概念' },
+  { value: 'METHOD', label: '方法' }, { value: 'CALCULATION', label: '计算' },
+  { value: 'EXPRESSION', label: '表达' }
+]
+const ABILITY_LEVEL_OPTIONS = [
+  { value: 'FOUNDATION', label: '基础' }, { value: 'APPLICATION', label: '应用' },
+  { value: 'COMPREHENSIVE', label: '综合' }
+]
+
 export default {
   name: 'WrongQuestion',
+  components: { LatexRenderer, QuestionOptionEditor, QuestionContentRenderer },
   data() {
     return {
       loading: false,
@@ -634,6 +710,8 @@ export default {
       correctionOpen: false,
       bindOpen: false,
       analysisOpen: false,
+      organizeOpen: false,
+      organizeSaving: false,
       showAnswerDetails: false,
       importOpen: false,
       importLoading: false,
@@ -652,8 +730,14 @@ export default {
       queryKnowledgePointOptions: [],
       bindKnowledgePointOptions: [],
       errorLabelOptions: [],
+      personalTagOptions: [],
+      savedFilters: [],
+      selectedSavedFilterId: null,
+      organizeRows: [],
       knowledgePointStatistics: [],
       errorAnalysisStatistics: [],
+      errorCauseOptions: ERROR_CAUSE_OPTIONS,
+      abilityLevelOptions: ABILITY_LEVEL_OPTIONS,
       statusOptions: [
         { label: '待改', value: 0 },
         { label: '已改', value: 1 },
@@ -676,8 +760,16 @@ export default {
         status: null,
         knowledgePointId: null,
         errorLabel: '',
+        errorCauseCode: '',
+        abilityLevel: '',
+        textbookVersion: '',
+        chapterName: '',
+        tagName: '',
+        favorite: null,
+        priorityLevel: null,
         keyWord: ''
       },
+      organizeForm: this.getDefaultOrganizeForm(),
       form: this.getDefaultForm(),
       correctionForm: this.getDefaultCorrectionForm(),
       bindForm: {
@@ -687,6 +779,8 @@ export default {
       analysisForm: {
         id: null,
         errorLabelValues: [],
+        errorCauseCodeValues: [],
+        abilityLevel: '',
         wrongReason: ''
       },
       imageForm: {
@@ -721,8 +815,10 @@ export default {
     }
   },
   created() {
+    this.applyRouteQuery()
     this.loadMenuCodes()
     this.loadDictOptions()
+    this.loadOrganizeOptions()
     this.getList()
   },
   computed: {
@@ -758,6 +854,12 @@ export default {
     }
   },
   methods: {
+    applyRouteQuery() {
+      const subject = this.$route.query.subject
+      const status = Number(this.$route.query.status)
+      if (subject) this.queryParams.subject = subject
+      if (Number.isInteger(status) && status >= 0 && status <= 3) this.queryParams.status = status
+    },
     loadMenuCodes() {
       getCurrentUserInfo().then(data => {
         this.menuCodes = Array.from((data && data.menu) || [])
@@ -799,14 +901,22 @@ export default {
         questionTypeName: '',
         questionTitle: '',
         questionContent: '',
+        contentFormat: 'TEXT',
+        optionsJson: '',
         wrongAnswer: '',
         correctAnswer: '',
         wrongReason: '',
         analysis: '',
+        keyHint: '',
+        solutionSteps: '',
+        commonMistake: '',
         learningPoint: '',
         knowledgePointIds: [],
         errorLabels: '',
         errorLabelValues: [],
+        errorCauseCodes: '',
+        errorCauseCodeValues: [],
+        abilityLevel: '',
         source: '',
         sourceName: '',
         imageUrl: '',
@@ -815,6 +925,9 @@ export default {
         imageUrl4: '',
         status: 0
       }
+    },
+    getDefaultOrganizeForm() {
+      return { textbookVersion: null, chapterName: null, favorite: null, priorityLevel: null, replaceTags: false, tagNames: [], replaceKnowledgePoints: false, knowledgePointIds: [], archive: false }
     },
     getDefaultCorrectionForm() {
       return {
@@ -877,6 +990,13 @@ export default {
         status: null,
         knowledgePointId: null,
         errorLabel: '',
+        errorCauseCode: '',
+        abilityLevel: '',
+        textbookVersion: '',
+        chapterName: '',
+        tagName: '',
+        favorite: null,
+        priorityLevel: null,
         keyWord: ''
       }
       this.queryKnowledgePointOptions = []
@@ -893,6 +1013,64 @@ export default {
     },
     handleSelectionChange(selection) {
       this.selectedRows = selection
+    },
+    loadOrganizeOptions() {
+      wrongQuestionTagList().then(rows => { this.personalTagOptions = rows || [] }).catch(() => { this.personalTagOptions = [] })
+      savedWrongQuestionFilterList().then(rows => { this.savedFilters = rows || [] }).catch(() => { this.savedFilters = [] })
+    },
+    applySavedFilter(id) {
+      const filter = this.savedFilters.find(item => item.id === id)
+      if (!filter) return
+      try {
+        const params = JSON.parse(filter.filterJson || '{}')
+        const current = { current: 1, pageSize: this.queryParams.pageSize }
+        this.queryParams = Object.assign(current, params)
+        this.loadQueryKnowledgePoints()
+        this.getList()
+      } catch (error) { this.$message.warning('该常用筛选数据已损坏，请删除后重新保存') }
+    },
+    saveCurrentFilter() {
+      this.$prompt('请输入筛选名称', '保存常用筛选', { inputPattern: /\S+/, inputErrorMessage: '筛选名称不能为空' }).then(({ value }) => {
+        const filterJson = JSON.stringify(Object.assign({}, this.queryParams, { current: 1 }))
+        return saveWrongQuestionFilter({ filterName: value.trim(), filterJson })
+      }).then(id => { this.$message.success('筛选已保存'); this.selectedSavedFilterId = id; this.loadOrganizeOptions() }).catch(() => {})
+    },
+    deleteCurrentFilter() {
+      const id = this.selectedSavedFilterId
+      if (!id) return
+      this.$confirm('删除该常用筛选吗？', '提示').then(() => deleteWrongQuestionFilter({ id })).then(() => { this.selectedSavedFilterId = null; this.loadOrganizeOptions() }).catch(() => {})
+    },
+    openOrganizeDialog(rows) {
+      if (!rows || !rows.length) return
+      this.organizeRows = rows
+      this.organizeForm = this.getDefaultOrganizeForm()
+      const first = rows[0]
+      if (rows.every(row => row.grade === first.grade && row.subject === first.subject)) {
+        knowledgePointList({ grade: first.grade, subject: first.subject }).then(rows => { this.knowledgePointOptions = rows || [] })
+      } else {
+        this.knowledgePointOptions = []
+      }
+      this.organizeOpen = true
+    },
+    submitOrganize() {
+      const form = this.organizeForm
+      const payload = { ids: this.organizeRows.map(row => row.id), textbookVersion: form.textbookVersion, chapterName: form.chapterName, favorite: form.favorite, priorityLevel: form.priorityLevel, archive: form.archive }
+      if (form.replaceTags) payload.tagNames = form.tagNames || []
+      if (form.replaceKnowledgePoints) payload.knowledgePointIds = form.knowledgePointIds || []
+      const hasChange = ['textbookVersion', 'chapterName', 'favorite', 'priorityLevel', 'tagNames', 'knowledgePointIds'].some(key => payload[key] !== null && payload[key] !== undefined) || payload.archive
+      if (!hasChange) return this.$message.warning('请至少设置一项整理内容')
+      this.organizeSaving = true
+      batchOrganizeWrongQuestion(payload).then(() => { this.$message.success('错题整理已保存'); this.organizeOpen = false; this.loadOrganizeOptions(); this.getList() }).catch(() => {}).finally(() => { this.organizeSaving = false })
+    },
+    handleAddToPracticeBasket() {
+      if (!this.selectedRows.length) {
+        this.$message.warning('请先选择要组卷的错题')
+        return
+      }
+      this.$router.push({
+        path: '/system/review/practice',
+        query: { basket: this.selectedRows.map(row => row.id).join(',') }
+      })
     },
     handleExportPrint() {
       // 列表只含摘要字段，打印前逐题读取详情并准备富文本与图片。
@@ -952,6 +1130,7 @@ export default {
         this.dialogTitle = '错题修改'
         this.form = Object.assign(this.getDefaultForm(), this.resolveData(response))
         this.form.errorLabelValues = this.parseErrorLabels(this.form.errorLabels)
+        this.form.errorCauseCodeValues = this.parseErrorCauseCodes(this.form.errorCauseCodes)
         this.optionImagePreviewUrls = this.getDefaultOptionImagePreviewUrls()
         this.fillOptionImagePreviewUrls(this.form, this.optionImagePreviewUrls)
         this.formOpen = true
@@ -1018,6 +1197,8 @@ export default {
         this.analysisForm = {
           id: row.id,
           errorLabelValues: this.parseErrorLabels(detail.errorLabels),
+          errorCauseCodeValues: this.parseErrorCauseCodes(detail.errorCauseCodes),
+          abilityLevel: detail.abilityLevel || '',
           wrongReason: detail.wrongReason || ''
         }
         this.analysisOpen = true
@@ -1094,6 +1275,17 @@ export default {
         return []
       }
       return Array.from(new Set(String(errorLabels).split(/[,，]/).map(item => item.trim()).filter(Boolean)))
+    },
+    parseErrorCauseCodes(errorCauseCodes) {
+      if (!errorCauseCodes) return []
+      return Array.from(new Set(String(errorCauseCodes).split(',').map(item => item.trim()).filter(Boolean)))
+    },
+    stringifyErrorCauseCodes(errorCauseCodeValues) {
+      return (errorCauseCodeValues || []).filter(item => ERROR_CAUSE_OPTIONS.some(option => option.value === item)).join(',')
+    },
+    abilityLevelLabel(abilityLevel) {
+      const option = ABILITY_LEVEL_OPTIONS.find(item => item.value === abilityLevel)
+      return option ? option.label : '未标注'
     },
     stringifyErrorLabels(errorLabelValues) {
       return (errorLabelValues || []).map(item => String(item).trim()).filter(Boolean).join(',')
@@ -1238,7 +1430,10 @@ export default {
         const request = this.form.id ? updateWrongQuestion : createWrongQuestion
         const requestData = Object.assign({}, this.form)
         requestData.errorLabels = this.stringifyErrorLabels(this.form.errorLabelValues)
+        requestData.errorCauseCodes = this.stringifyErrorCauseCodes(this.form.errorCauseCodeValues)
+        requestData.abilityLevel = requestData.abilityLevel || null
         delete requestData.errorLabelValues
+        delete requestData.errorCauseCodeValues
         delete requestData.gradeName
         delete requestData.subjectName
         delete requestData.questionTypeName
@@ -1358,6 +1553,8 @@ export default {
       updateWrongQuestionErrorAnalysis({
         id: this.analysisForm.id,
         errorLabels: this.stringifyErrorLabels(this.analysisForm.errorLabelValues),
+        errorCauseCodes: this.stringifyErrorCauseCodes(this.analysisForm.errorCauseCodeValues),
+        abilityLevel: this.analysisForm.abilityLevel || null,
         wrongReason: this.analysisForm.wrongReason
       }).then(() => {
         this.$message.success('错因分析已保存')
@@ -1391,6 +1588,7 @@ export default {
 </script>
 
 <style scoped>
+.saved-filter-select { width: 130px; }.personal-tag { margin: 0 3px 3px 0; }.organize-tip { margin-bottom: 16px; }
 .wrong-question-page .filter-item {
   width: 180px;
 }

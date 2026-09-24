@@ -4,11 +4,14 @@ import com.study.common.core.domain.Result;
 import com.study.common.core.utils.ResultUtils;
 import com.study.module.system.questionbank.dto.request.KnowledgePointSaveReq;
 import com.study.module.system.questionbank.dto.request.KnowledgePointIdReq;
+import com.study.module.system.questionbank.dto.request.KnowledgePointPrerequisiteSaveReq;
 import com.study.module.system.questionbank.dto.response.KnowledgePointListResp;
+import com.study.module.system.questionbank.dto.response.KnowledgePointPrerequisiteResp;
 import com.study.module.system.questionbank.service.KnowledgePointListService;
 import com.study.module.system.questionbank.service.KnowledgePointSaveService;
 import com.study.module.system.questionbank.service.KnowledgePointTreeService;
 import com.study.module.system.questionbank.service.KnowledgePointDeleteService;
+import com.study.module.system.questionbank.service.KnowledgePointPrerequisiteService;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,6 +44,9 @@ public class KnowledgePointController {
 
     @Autowired
     KnowledgePointDeleteService knowledgePointDeleteService;
+
+    @Autowired
+    KnowledgePointPrerequisiteService knowledgePointPrerequisiteService;
 
     @ApiOperation("知识点列表")
     @PreAuthorize("hasAuthority('system:questionBank:knowledgePointList')")
@@ -79,5 +85,21 @@ public class KnowledgePointController {
     public Result<Void> deleteKnowledgePoint(@RequestBody @Validated KnowledgePointIdReq request) {
         knowledgePointDeleteService.deleteKnowledgePoint(request.getId());
         return ResultUtils.success();
+    }
+
+    @ApiOperation("保存知识点前置关系")
+    @PreAuthorize("hasAuthority('system:questionBank:saveKnowledgePointPrerequisite')")
+    @PostMapping("/saveKnowledgePointPrerequisite")
+    public Result<Void> saveKnowledgePointPrerequisite(@RequestBody @Validated KnowledgePointPrerequisiteSaveReq request) {
+        knowledgePointPrerequisiteService.saveKnowledgePointPrerequisite(request);
+        return ResultUtils.success();
+    }
+
+    @ApiOperation("知识点前置关系列表")
+    @PreAuthorize("hasAuthority('system:questionBank:knowledgePointPrerequisiteList')")
+    @GetMapping("/knowledgePointPrerequisiteList")
+    public Result<List<KnowledgePointPrerequisiteResp>> knowledgePointPrerequisiteList(
+            @RequestParam(required = false) Long knowledgePointId, @RequestParam(required = false) String subject) {
+        return ResultUtils.success(knowledgePointPrerequisiteService.knowledgePointPrerequisiteList(knowledgePointId, subject));
     }
 }

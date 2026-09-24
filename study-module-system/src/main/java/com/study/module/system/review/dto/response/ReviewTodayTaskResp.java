@@ -5,6 +5,7 @@ import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 今日复习题目响应类
@@ -75,6 +76,18 @@ public class ReviewTodayTaskResp {
     @ApiModelProperty("下次复习时间")
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime nextReviewTime;
+
+    @ApiModelProperty("当前复习间隔，单位分钟")
+    private Integer currentIntervalMinutes;
+
+    @ApiModelProperty("为何今天进入题单")
+    private String dueReason;
+
+    @ApiModelProperty("预计完成本题的分钟数")
+    private Integer estimatedMinutes;
+
+    @ApiModelProperty("不同反馈下的下一次复习预估")
+    private List<ReviewFeedbackProjectionResp> feedbackProjectionList;
 
     @ApiModelProperty("是否逾期: 0否, 1是")
     private Integer overdue;

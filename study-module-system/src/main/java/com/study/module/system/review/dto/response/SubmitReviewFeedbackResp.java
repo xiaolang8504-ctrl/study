@@ -43,6 +43,9 @@ public class SubmitReviewFeedbackResp {
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime nextReviewTime;
 
+    @ApiModelProperty("本次反馈形成该排期的原因")
+    private String nextReviewReason;
+
     @ApiModelProperty("是否已掌握")
     private Boolean mastered;
 }

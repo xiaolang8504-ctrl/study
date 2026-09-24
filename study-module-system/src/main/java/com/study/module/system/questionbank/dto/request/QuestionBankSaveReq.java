@@ -6,6 +6,7 @@ import lombok.Data;
 import javax.validation.constraints.Max;
 import javax.validation.constraints.Min;
 import javax.validation.constraints.NotBlank;
+import javax.validation.constraints.Size;
 import java.util.List;
 
 /**
@@ -78,6 +79,12 @@ public class QuestionBankSaveReq {
     @ApiModelProperty("题目来源名称")
     private String sourceName;
 
+    @Size(max = 100, message = "教材版本不能超过100个字符") private String textbookVersion;
+    @Size(max = 200, message = "章节不能超过200个字符") private String chapterName;
+    @Size(max = 100, message = "地区不能超过100个字符") private String region;
+    @Min(value = 1900, message = "年份不正确") @Max(value = 2100, message = "年份不正确") private Integer examYear;
+    @Size(max = 50, message = "卷型不能超过50个字符") private String paperType;
+
     @ApiModelProperty("内容提供方或版权方")
     private String provider;
 
@@ -86,6 +93,8 @@ public class QuestionBankSaveReq {
 
     @ApiModelProperty("授权说明、合同编号或适用范围")
     private String license;
+
+    @Size(max = 50, message = "授权版本不能超过50个字符") private String licenseVersion;
 
     @ApiModelProperty("授权到期日，格式 yyyy-MM-dd")
     private java.time.LocalDate expireAt;

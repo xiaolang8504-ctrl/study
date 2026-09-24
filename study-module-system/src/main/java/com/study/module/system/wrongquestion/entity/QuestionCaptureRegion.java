@@ -53,6 +53,8 @@ public class QuestionCaptureRegion {
     private String source;
     private String learningPoint;
     private String errorLabels;
+    /** 题块确认后裁剪使用的页面：ORIGINAL 或 CLEANED。 */
+    private String cleanImageMode;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 }

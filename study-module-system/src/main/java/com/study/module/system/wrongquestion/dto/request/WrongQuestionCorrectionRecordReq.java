@@ -17,6 +17,12 @@ public class WrongQuestionCorrectionRecordReq {
     @Range(min = 1, message = "错题ID需大于{min}")
     private Long wrongQuestionId;
 
+    @ApiModelProperty("提交前独立思路")
+    private String thinking;
+
+    @ApiModelProperty("学生自述错因")
+    private String errorReason;
+
     @ApiModelProperty("订正答案")
     private String correctionAnswer;
 
